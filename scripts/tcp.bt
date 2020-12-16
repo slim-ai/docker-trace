@@ -1,0 +1,19 @@
+#!/usr/bin/env bpftrace
+
+#include <linux/socket.h>
+#include <net/sock.h>
+
+kprobe:tcp_connect
+/cgroup == cgroupid("/sys/fs/cgroup/unified/system.slice/containerd.service")/
+{
+  $sk = ((struct sock *) arg0);
+  $inet_family = $sk->__sk_common.skc_family;
+  if ($inet_family == AF_INET) {
+    $daddr = $sk->__sk_common.skc_daddr;
+    $saddr = $sk->__sk_common.skc_rcv_saddr;
+    $sport = $sk->__sk_common.skc_num;
+    $dport = $sk->__sk_common.skc_dport;
+    $dport = ($dport >> 8) | (($dport << 8) & 0x00FF00); // Destination port is big endian, it must be flipped
+    printf("%d %s %d %s %d\n", pid, ntop(AF_INET, $saddr), $sport, ntop(AF_INET, $daddr), $dport);
+  }
+}

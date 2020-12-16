@@ -1,0 +1,23 @@
+#!/usr/bin/env bpftrace
+tracepoint:raw_syscalls:sys_enter
+/cgroup == cgroupid("/sys/fs/cgroup/unified/system.slice/containerd.service") &&
+ comm != "containerd-shim" &&
+ comm != "bpftrace" &&
+ comm != "containerd" &&
+ comm != "exe" &&
+ comm != "7" &&
+ strncmp("runc", comm, 4) != 0/
+{
+    @syscall[args->id] = count();
+    @process[comm] = count();
+}
+
+END
+{
+	print(@syscall);
+	clear(@syscall);
+
+	print(@process);
+	clear(@process);
+
+}
