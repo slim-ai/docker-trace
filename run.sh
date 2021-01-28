@@ -3,7 +3,13 @@ set -eou pipefail
 cd $(dirname $0)
 if ! docker inspect arch:bpftrace &>/dev/null; then
     id=$(cat /proc/sys/kernel/random/uuid)
-    if docker run --name $id -it --network host archlinux:latest bash -c "pacman -Sy --noconfirm which make git gcc go bpftrace python-bcc"; then
+    if docker run --name $id -it --network host archlinux:latest bash -c "
+        echo 'Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch' >  /etc/pacman.d/mirrorlist
+        echo 'Server = https://mirrors.xtom.com/archlinux/\$repo/os/\$arch'   >> /etc/pacman.d/mirrorlist
+        echo 'Server = https://mirror.lty.me/archlinux/\$repo/os/\$arch'      >> /etc/pacman.d/mirrorlist
+        pacman -Syu --noconfirm which make git gcc bpftrace python-bcc
+    "
+    then
         docker commit $id arch:bpftrace
     fi
 fi
