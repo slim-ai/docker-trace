@@ -15,7 +15,7 @@ if echo "$@" | grep -e "\-h" -e "\-\-help" &>/dev/null; then
 fi
 
 # check for cgroups v2
-if ! ls /sys/fs/cgroup/ | grep -v cgroup.controllers &>/dev/null; then
+if ! ls /sys/fs/cgroup/ | grep cgroup.controllers &>/dev/null; then
     echo
     echo fatal: cgroups v2 are required
     echo
