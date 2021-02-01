@@ -38,7 +38,7 @@ script=$2
 # invoke
 kernel=$(uname -r)
 docker run ${DOCKER_OPTS:-} \
-       -t \
+       -it \
        --rm \
        --privileged \
        --cap-add=SYS_ADMIN \
