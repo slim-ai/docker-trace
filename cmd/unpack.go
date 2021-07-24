@@ -23,7 +23,7 @@ type unpackArgs struct {
 }
 
 func (unpackArgs) Description() string {
-	return "\ntrace things in a container\n"
+	return "\nunpack a container into directories and files\n"
 }
 
 func unpack() {
@@ -32,6 +32,7 @@ func unpack() {
 
 	shell := fmt.Sprintf("set -eou pipefail; docker save %s | tar xf -", args.Name)
 	cmd := exec.Command("bash", "-c", shell)
+	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
 		lib.Logger.Fatal("error:", shell, err)
@@ -42,7 +43,7 @@ func unpack() {
 		lib.Logger.Fatal("error:", err)
 	}
 
-	var manifest []Manifest
+	var manifest []unpackManifest
 	err = json.Unmarshal(bytes, &manifest)
 	if err != nil {
 		lib.Logger.Fatal("error:", err)
@@ -84,7 +85,7 @@ func unpack() {
 		for _, layerTar := range manifest[0].Layers {
 			err := deleteLayerExtras(args.NoRename, layerTar, layerNames)
 			if err != nil {
-			    lib.Logger.Fatal("error:", err)
+				lib.Logger.Fatal("error:", err)
 			}
 		}
 	}
@@ -163,14 +164,6 @@ func renameDirectory(layerTar string, layerNames map[string]string) error {
 	return nil
 }
 
-type Manifest struct {
+type unpackManifest struct {
 	Layers []string `json:"layers"`
-}
-
-type RootFS struct {
-	DiffIDs []string `json:"diff_ids"`
-}
-
-type Config struct {
-	RootFS RootFS `json:"rootfs"`
 }
