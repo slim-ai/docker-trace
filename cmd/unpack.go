@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/alexflint/go-arg"
 	"github.com/nathants/docker-trace/lib"
@@ -43,24 +44,44 @@ func unpack() {
 		lib.Logger.Fatal("error:", err)
 	}
 
-	var manifest []unpackManifest
-	err = json.Unmarshal(bytes, &manifest)
+	var manifests []unpackManifest
+	var manifest unpackManifest
+
+	err = json.Unmarshal(bytes, &manifests)
 	if err != nil {
 		lib.Logger.Fatal("error:", err)
 	}
 
-	if len(manifest) != 1 {
-		lib.Logger.Fatal("error: bad manifest size ", len(manifest))
+	found := false
+
+outer:
+	for _, m := range manifests {
+		if strings.HasPrefix(m.Config, args.Name) {
+			found = true
+			manifest = m
+			break outer
+		}
+		for _, tag := range m.RepoTags {
+			if tag == args.Name {
+				found = true
+				manifest = m
+				break outer
+			}
+		}
+	}
+
+	if !found {
+		lib.Logger.Fatal(lib.Pformat(manifests) + "tag not found in manifest")
 	}
 
 	layerNames := make(map[string]string)
-	for i, layerID := range manifest[0].Layers {
+	for i, layerID := range manifest.Layers {
 		layerID = path.Dir(layerID)
 		layerNames[layerID] = fmt.Sprintf("layer%02d", i)
 	}
 
 	if !args.NoRename {
-		for _, layerTar := range manifest[0].Layers {
+		for _, layerTar := range manifest.Layers {
 			err := renameSymlink(layerTar, layerNames)
 			if err != nil {
 				lib.Logger.Fatal("error:", err)
@@ -73,7 +94,7 @@ func unpack() {
 	}
 
 	if !args.NoUntar {
-		for _, layerTar := range manifest[0].Layers {
+		for _, layerTar := range manifest.Layers {
 			err := untarLayer(args.NoRename, layerTar, layerNames)
 			if err != nil {
 				lib.Logger.Fatal("error:", err)
@@ -82,7 +103,7 @@ func unpack() {
 	}
 
 	if !args.NoUntar {
-		for _, layerTar := range manifest[0].Layers {
+		for _, layerTar := range manifest.Layers {
 			err := deleteLayerExtras(args.NoRename, layerTar, layerNames)
 			if err != nil {
 				lib.Logger.Fatal("error:", err)
@@ -165,5 +186,7 @@ func renameDirectory(layerTar string, layerNames map[string]string) error {
 }
 
 type unpackManifest struct {
-	Layers []string `json:"layers"`
+	Config   string
+	Layers   []string
+	RepoTags []string
 }

@@ -1,41 +1,32 @@
 package lib
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
+	"io/fs"
 	"os"
 	"os/signal"
+	"path"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/avast/retry-go"
+	"github.com/docker/docker/client"
 	"github.com/mattn/go-isatty"
 )
 
 var Commands = make(map[string]func())
-
-type LogWriter struct{}
-
-func (LogWriter) Write(p []byte) (int, error) {
-	sep1 := []byte(".go:")
-	sep2 := []byte("/")
-	parts := bytes.SplitN(p, sep1, 2)
-	filepath := bytes.Split(parts[0], sep2)
-	keep := [][]byte{
-		filepath[len(filepath)-2],
-		filepath[len(filepath)-1],
-	}
-	parts[0] = bytes.Join(keep, sep2)
-	return os.Stderr.Write(bytes.Join(parts, sep1))
-}
-
-var Logger = log.New(LogWriter{}, "", log.Llongfile)
 
 func SignalHandler(cancel func()) {
 	c := make(chan os.Signal, 1)
@@ -109,8 +100,7 @@ func Panic1(err error) {
 
 func Panic2(x interface{}, e error) interface{} {
 	if e != nil {
-		Logger.Printf("fatal: %s\n", e)
-		os.Exit(1)
+		Logger.Fatalf("fatal: %s\n", e)
 	}
 	return x
 }
@@ -166,3 +156,324 @@ var (
 	Cyan    = color(36)
 	White   = color(37)
 )
+
+func Scan(ctx context.Context, name string) ([]*ScanFile, map[string]int, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		Logger.Println("error:", err)
+		return nil, nil, err
+	}
+
+	var manifests []ScanManifest
+	var manifest ScanManifest
+	var files []*ScanFile
+
+	r, err := cli.ImageSave(ctx, []string{name})
+	if err != nil {
+		Logger.Println("error:", err)
+		return nil, nil, err
+	}
+	defer func() { _ = r.Close() }()
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, nil, err
+		}
+		if header == nil {
+			continue
+		}
+		switch header.Typeflag {
+		case tar.TypeReg:
+			if path.Base(header.Name) == "layer.tar" {
+				layerFiles, err := ScanLayer(header.Name, tr)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, nil, err
+				}
+				files = append(files, layerFiles...)
+			} else if header.Name == "manifest.json" {
+				var data bytes.Buffer
+				_, err := io.Copy(&data, tr)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, nil, err
+				}
+				err = json.Unmarshal(data.Bytes(), &manifests)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, nil, err
+				}
+			}
+		}
+	}
+
+	found := false
+
+outer:
+	for _, m := range manifests {
+		if strings.HasPrefix(m.Config, name) {
+			found = true
+			manifest = m
+			break outer
+		}
+		for _, tag := range m.RepoTags {
+			if tag == name {
+				found = true
+				manifest = m
+				break outer
+			}
+		}
+	}
+
+	if !found {
+		err := fmt.Errorf(Pformat(manifests) + "\ntag not found in manifest")
+		Logger.Println("error:", err)
+		return nil, nil, err
+	}
+
+	layers := make(map[string]int)
+	for i, layer := range manifest.Layers {
+		layers[layer] = i
+	}
+
+	for _, f := range files {
+		i, ok := layers[f.Layer]
+		if !ok {
+			err := fmt.Errorf("error: no layer %s", f.Layer)
+			Logger.Println("error:", err)
+			return nil, nil, err
+		}
+		f.LayerIndex = i
+		f.Layer = ""
+	}
+
+	sort.Slice(files, func(i, j int) bool { return files[i].LayerIndex < files[j].LayerIndex })
+	sort.SliceStable(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+
+	// keep only last update to the file, not all updates across all layers
+	var result []*ScanFile
+	var last *ScanFile
+	for _, f := range files {
+		if last != nil && f.Path != last.Path {
+			result = append(result, last)
+		}
+		last = f
+	}
+	if last.Path != result[len(result)-1].Path {
+		result = append(result, last)
+	}
+	return result, layers, nil
+}
+
+type ScanFile struct {
+	LayerIndex  int
+	Layer       string
+	Path        string
+	LinkTarget  string
+	Mode        fs.FileMode
+	Size        int64
+	ModTime     time.Time
+	Hash        string
+	ContentType string
+	Uid         int
+	Gid         int
+}
+
+func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
+	var result []*ScanFile
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, err
+		}
+		if header == nil {
+			continue
+		}
+		switch header.Typeflag {
+		case tar.TypeReg:
+			var data bytes.Buffer
+			_, err := io.Copy(&data, tr)
+			if err != nil {
+				Logger.Println("error:", err)
+				return nil, err
+			}
+			contentType := "binary"
+			if utf8.Valid(data.Bytes()) {
+				contentType = "utf8"
+			}
+			sum := sha1.Sum(data.Bytes())
+			hash := hex.EncodeToString(sum[:])
+			result = append(result, &ScanFile{
+				Layer:       layer,
+				Path:        "/" + header.Name,
+				Mode:        header.FileInfo().Mode(),
+				Size:        header.Size,
+				ModTime:     header.ModTime,
+				Hash:        hash,
+				ContentType: contentType,
+				Uid:         header.Uid,
+				Gid:         header.Gid,
+			})
+		case tar.TypeSymlink:
+			result = append(result, &ScanFile{
+				Layer:      layer,
+				Path:       "/" + header.Name,
+				Mode:       header.FileInfo().Mode(),
+				ModTime:    header.ModTime,
+				LinkTarget: header.Linkname,
+				Uid:        header.Uid,
+				Gid:        header.Gid,
+			})
+		case tar.TypeDir:
+			result = append(result, &ScanFile{
+				Layer:   layer,
+				Path:    "/" + header.Name,
+				Mode:    header.FileInfo().Mode(),
+				ModTime: header.ModTime,
+				Uid:     header.Uid,
+				Gid:     header.Gid,
+			})
+		}
+	}
+	return result, nil
+}
+
+type ScanManifest struct {
+	Config   string
+	Layers   []string
+	RepoTags []string
+}
+
+func Dockerfile(ctx context.Context, name string) ([]string, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		Logger.Println("error:", err)
+		return nil, err
+	}
+
+	var manifests []DockerfileManifest
+	var manifest DockerfileManifest
+	configs := make(map[string]*DockerfileConfig)
+
+	r, err := cli.ImageSave(ctx, []string{name})
+	if err != nil {
+		Logger.Println("error:", err)
+		return nil, err
+	}
+	defer func() { _ = r.Close() }()
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, err
+		}
+		if header == nil {
+			continue
+		}
+		switch header.Typeflag {
+		case tar.TypeReg:
+			if header.Name == "manifest.json" {
+				var data bytes.Buffer
+				_, err := io.Copy(&data, tr)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, err
+				}
+				err = json.Unmarshal(data.Bytes(), &manifests)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, err
+				}
+			} else if strings.HasSuffix(header.Name, ".json") {
+				var data bytes.Buffer
+				_, err := io.Copy(&data, tr)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, err
+				}
+				config := DockerfileConfig{}
+				err = json.Unmarshal(data.Bytes(), &config)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, err
+				}
+				configs[header.Name] = &config
+			}
+
+		}
+	}
+
+	found := false
+
+outer:
+	for _, m := range manifests {
+		if strings.HasPrefix(m.Config, name) {
+			found = true
+			manifest = m
+			break outer
+		}
+		for _, tag := range m.RepoTags {
+			if tag == name {
+				found = true
+				manifest = m
+				break outer
+			}
+		}
+	}
+
+	if !found {
+		err := fmt.Errorf(Pformat(manifests) + "tag not found in manifest")
+		Logger.Println("error:", err)
+		return nil, err
+	}
+
+	config, ok := configs[manifest.Config]
+	if !ok {
+		err := fmt.Errorf("no such config: %s", manifest.Config)
+		Logger.Println("error:", err)
+		return nil, err
+	}
+
+	var result []string
+
+	for _, h := range config.History {
+		if strings.Contains(h.CreatedBy, " #(nop) ") {
+			line := h.CreatedBy
+			line = strings.Split(line, " #(nop) ")[1]
+			line = strings.TrimLeft(line, " ")
+			line = strings.ReplaceAll(line, `" `, `", `)
+			if !strings.HasPrefix(line, "ADD ") && !strings.HasPrefix(line, "COPY ") && !strings.HasPrefix(line, "LABEL ") && line != `CMD ["bash"]` {
+				result = append(result, line)
+			}
+		}
+	}
+	return result, nil
+}
+
+type DockerfileHistory struct {
+	CreatedBy string `json:"created_by"`
+}
+
+type DockerfileConfig struct {
+	History []DockerfileHistory `json:"history"`
+}
+
+type DockerfileManifest struct {
+	Config   string
+	Layers   []string
+	RepoTags []string
+}
