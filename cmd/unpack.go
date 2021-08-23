@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 
 	"github.com/alexflint/go-arg"
 	"github.com/nathants/docker-trace/lib"
@@ -44,34 +43,16 @@ func unpack() {
 		lib.Logger.Fatal("error:", err)
 	}
 
-	var manifests []unpackManifest
-	var manifest unpackManifest
+	var manifests []lib.Manifest
 
 	err = json.Unmarshal(bytes, &manifests)
 	if err != nil {
 		lib.Logger.Fatal("error:", err)
 	}
 
-	found := false
-
-outer:
-	for _, m := range manifests {
-		if strings.HasPrefix(m.Config, args.Name) {
-			found = true
-			manifest = m
-			break outer
-		}
-		for _, tag := range m.RepoTags {
-			if tag == args.Name {
-				found = true
-				manifest = m
-				break outer
-			}
-		}
-	}
-
-	if !found {
-		lib.Logger.Fatal(lib.Pformat(manifests) + "tag not found in manifest")
+	manifest, err := lib.FindManifest(manifests, args.Name)
+	if err != nil {
+	    lib.Logger.Fatal("error: ", err)
 	}
 
 	layerNames := make(map[string]string)
@@ -183,10 +164,4 @@ func renameDirectory(layerTar string, layerNames map[string]string) error {
 		return err
 	}
 	return nil
-}
-
-type unpackManifest struct {
-	Config   string
-	Layers   []string
-	RepoTags []string
 }

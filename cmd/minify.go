@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/alexflint/go-arg"
 	"github.com/docker/docker/api/types"
@@ -234,20 +233,6 @@ func minify() {
 	if err != nil {
 	    lib.Logger.Fatal("error: ", err)
 	}
-}
-
-type ScanFile struct {
-	LayerIndex  int
-	Layer       string
-	Path        string
-	LinkTarget  string
-	Mode        int64
-	Size        int64
-	ModTime     time.Time
-	Hash        string
-	ContentType string
-	Uid         int
-	Gid         int
 }
 
 func minifyLayer(layer string, r io.Reader, tw *tar.Writer, layers map[string]int, includeFiles map[string]*lib.ScanFile) {

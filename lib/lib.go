@@ -28,6 +28,20 @@ import (
 
 var Commands = make(map[string]func())
 
+type Manifest struct {
+	Config   string
+	Layers   []string
+	RepoTags []string
+}
+
+type DockerfileHistory struct {
+	CreatedBy string `json:"created_by"`
+}
+
+type DockerfileConfig struct {
+	History []DockerfileHistory `json:"history"`
+}
+
 func SignalHandler(cancel func()) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -157,6 +171,30 @@ var (
 	White   = color(37)
 )
 
+func FindManifest(manifests []Manifest, name string) (Manifest, error) {
+	for _, m := range manifests {
+		// find by imageID
+		if strings.HasPrefix(m.Config, name) {
+			return m, nil
+		}
+		// find by tag
+		if strings.Contains(name, ":") {
+			for _, tag := range m.RepoTags {
+				if tag == name {
+					return m, nil
+				}
+			}
+		} else {
+			err := fmt.Errorf("name must include a tag or be an imageID, got: %s", name)
+			Logger.Println("error:", err)
+			return Manifest{}, err
+		}
+	}
+	err := fmt.Errorf(Pformat(manifests) + "\ntag not found in manifest")
+	Logger.Println("error:", err)
+	return Manifest{}, err
+}
+
 func Scan(ctx context.Context, name string) ([]*ScanFile, map[string]int, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -164,8 +202,7 @@ func Scan(ctx context.Context, name string) ([]*ScanFile, map[string]int, error)
 		return nil, nil, err
 	}
 
-	var manifests []ScanManifest
-	var manifest ScanManifest
+	var manifests []Manifest
 	var files []*ScanFile
 
 	r, err := cli.ImageSave(ctx, []string{name})
@@ -212,26 +249,8 @@ func Scan(ctx context.Context, name string) ([]*ScanFile, map[string]int, error)
 		}
 	}
 
-	found := false
-
-outer:
-	for _, m := range manifests {
-		if strings.HasPrefix(m.Config, name) {
-			found = true
-			manifest = m
-			break outer
-		}
-		for _, tag := range m.RepoTags {
-			if tag == name {
-				found = true
-				manifest = m
-				break outer
-			}
-		}
-	}
-
-	if !found {
-		err := fmt.Errorf(Pformat(manifests) + "\ntag not found in manifest")
+	manifest, err := FindManifest(manifests, name)
+	if err != nil {
 		Logger.Println("error:", err)
 		return nil, nil, err
 	}
@@ -348,12 +367,6 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 	return result, nil
 }
 
-type ScanManifest struct {
-	Config   string
-	Layers   []string
-	RepoTags []string
-}
-
 func Dockerfile(ctx context.Context, name string) ([]string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -361,8 +374,7 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 		return nil, err
 	}
 
-	var manifests []DockerfileManifest
-	var manifest DockerfileManifest
+	var manifests []Manifest
 	configs := make(map[string]*DockerfileConfig)
 
 	r, err := cli.ImageSave(ctx, []string{name})
@@ -417,26 +429,8 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 		}
 	}
 
-	found := false
-
-outer:
-	for _, m := range manifests {
-		if strings.HasPrefix(m.Config, name) {
-			found = true
-			manifest = m
-			break outer
-		}
-		for _, tag := range m.RepoTags {
-			if tag == name {
-				found = true
-				manifest = m
-				break outer
-			}
-		}
-	}
-
-	if !found {
-		err := fmt.Errorf(Pformat(manifests) + "tag not found in manifest")
+	manifest, err := FindManifest(manifests, name)
+	if err != nil {
 		Logger.Println("error:", err)
 		return nil, err
 	}
@@ -462,18 +456,4 @@ outer:
 		}
 	}
 	return result, nil
-}
-
-type DockerfileHistory struct {
-	CreatedBy string `json:"created_by"`
-}
-
-type DockerfileConfig struct {
-	History []DockerfileHistory `json:"history"`
-}
-
-type DockerfileManifest struct {
-	Config   string
-	Layers   []string
-	RepoTags []string
 }
