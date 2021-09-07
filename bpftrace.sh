@@ -26,7 +26,7 @@ fi
 
 # build if needed
 if ! docker inspect arch:bpftrace &>/dev/null; then
-    docker build -t arch:bpftrace .
+    docker build ${DOCKER_OPTS:-} -t arch:bpftrace .
 fi
 
 # trace this container

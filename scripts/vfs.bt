@@ -2,7 +2,8 @@
 
 // ENTER
 
-tracepoint:syscalls:sys_enter_statfs
+tracepoint:syscalls:sys_enter_statfs,
+tracepoint:syscalls:sys_enter_readlinkat
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
 { @filename[tid] = args->pathname; }
 
@@ -36,6 +37,10 @@ tracepoint:syscalls:sys_exit_openat
 tracepoint:syscalls:sys_exit_readlink
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
 { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlink %d %s %d %s\n", pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+
+tracepoint:syscalls:sys_exit_readlinkat
+/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
+{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlinkat %d %s %d %s\n", pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
 
 tracepoint:syscalls:sys_exit_statfs
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
