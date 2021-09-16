@@ -28,6 +28,12 @@ import (
 
 var Commands = make(map[string]func())
 
+type ArgsStruct interface {
+	Description() string
+}
+
+var Args = make(map[string]ArgsStruct)
+
 type Manifest struct {
 	Config   string
 	Layers   []string
@@ -456,4 +462,11 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 		}
 	}
 	return result, nil
+}
+
+func Max(i, j int) int {
+	if i > j {
+		return i
+	}
+	return j
 }

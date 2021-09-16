@@ -11,6 +11,7 @@ import (
 
 func init() {
 	lib.Commands["scan"] = scan
+	lib.Args["scan"] = scanArgs{}
 }
 
 type scanArgs struct {
@@ -18,7 +19,7 @@ type scanArgs struct {
 }
 
 func (scanArgs) Description() string {
-	return "\nscan a container and dump metadata and utf8 content\n"
+	return "\nscan a container and list filesystem contents\n"
 }
 
 func valueOrDash(x interface{}) string {

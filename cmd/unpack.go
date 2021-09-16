@@ -14,6 +14,7 @@ import (
 
 func init() {
 	lib.Commands["unpack"] = unpack
+	lib.Args["unpack"] = unpackArgs{}
 }
 
 type unpackArgs struct {

@@ -11,6 +11,7 @@ import (
 
 func init() {
 	lib.Commands["dockerfile"] = dockerfile
+	lib.Args["dockerfile"] = dockerfileArgs{}
 }
 
 type dockerfileArgs struct {

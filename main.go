@@ -1,21 +1,28 @@
 package main
 
 import (
-	"os"
 	"fmt"
+	"os"
 	"sort"
-	"github.com/nathants/docker-trace/lib"
+	"strings"
+
 	_ "github.com/nathants/docker-trace/cmd"
+	"github.com/nathants/docker-trace/lib"
 )
+
+
 
 func usage() {
 	var fns []string
-	for k := range lib.Commands {
-		fns = append(fns, k)
+	maxLen := 0
+	for fn := range lib.Commands {
+		fns = append(fns, fn)
+		maxLen = lib.Max(maxLen, len(fn))
 	}
 	sort.Strings(fns)
+	fmtStr := "%-" + fmt.Sprint(maxLen) + "s - %s\n"
 	for _, fn := range fns {
-		fmt.Println(fn)
+		fmt.Printf(fmtStr, fn, strings.Trim(lib.Args[fn].Description(), "\n"))
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 
 func init() {
 	lib.Commands["minify"] = minify
+	lib.Args["minify"] = minifyArgs{}
 }
 
 type minifyArgs struct {
@@ -29,7 +30,7 @@ type minifyArgs struct {
 }
 
 func (minifyArgs) Description() string {
-	return "\nminify a container, pass newline separated list of paths to keep on stdin\n"
+	return "\nminify a container keeping files passed on stdin\n"
 }
 
 func minify() {

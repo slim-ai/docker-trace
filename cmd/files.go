@@ -25,6 +25,7 @@ import (
 
 func init() {
 	lib.Commands["files"] = files
+	lib.Args["files"] = filesArgs{}
 }
 
 type filesArgs struct {
@@ -32,7 +33,7 @@ type filesArgs struct {
 }
 
 func (filesArgs) Description() string {
-	return "\nbpf trace filesystem access in a container\n"
+	return "\nbpftrace filesystem access in a running container\n"
 }
 
 const filesDockerfile = `
