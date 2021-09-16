@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/nathants/docker-trace/lib"
+	"github.com/satori/go.uuid"
 )
 
 func init() {
@@ -23,8 +24,8 @@ func init() {
 }
 
 type minifyArgs struct {
-	Name    string `arg:"positional,required"`
-	OutName string `arg:"positional,required"`
+	ContainerIn  string `arg:"positional,required"`
+	ContainerOut string `arg:"positional,required"`
 }
 
 func (minifyArgs) Description() string {
@@ -35,8 +36,9 @@ func minify() {
 	var args minifyArgs
 	arg.MustParse(&args)
 	ctx := context.Background()
+	uid := uuid.NewV4().String()
 	//
-	files, layers, err := lib.Scan(ctx, args.Name)
+	files, layers, err := lib.Scan(ctx, args.ContainerIn)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -72,13 +74,12 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	r, err := cli.ImageSave(ctx, []string{args.Name})
+	r, err := cli.ImageSave(ctx, []string{args.ContainerIn})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	defer func() { _ = r.Close() }()
 	tr := tar.NewReader(r)
-	w, err := os.OpenFile("image.tar", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	w, err := os.OpenFile("/tmp/image.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -110,11 +111,11 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	f, err := os.OpenFile("Dockerfile", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	f, err := os.OpenFile("/tmp/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	lines, err := lib.Dockerfile(ctx, args.Name)
+	lines, err := lib.Dockerfile(ctx, args.ContainerIn)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -122,7 +123,7 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	_, err = f.WriteString("ADD image.tar /\n")
+	_, err = f.WriteString(fmt.Sprintf("ADD /tmp/image.tar.%s /\n", uid))
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -137,17 +138,18 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	w, err = os.OpenFile("context.tar", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	w, err = os.OpenFile("/tmp/context.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	tw = tar.NewWriter(w)
 	//
-	fi, err := os.Stat("image.tar")
+	fi, err := os.Stat("/tmp/image.tar." + uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	header, err := tar.FileInfoHeader(fi, "")
+	header.Name = "/tmp/image.tar." + uid
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -155,7 +157,11 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	r, err = os.Open("image.tar")
+	err = r.Close()
+	if err != nil {
+		lib.Logger.Fatal("error: ", err)
+	}
+	r, err = os.Open("/tmp/image.tar." + uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -164,11 +170,12 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	fi, err = os.Stat("Dockerfile")
+	fi, err = os.Stat("/tmp/Dockerfile." + uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	header, err = tar.FileInfoHeader(fi, "")
+	header.Name = "/tmp/Dockerfile." + uid
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -176,7 +183,11 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	r, err = os.Open("Dockerfile")
+	err = r.Close()
+	if err != nil {
+		lib.Logger.Fatal("error: ", err)
+	}
+	r, err = os.Open("/tmp/Dockerfile." + uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -194,16 +205,22 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	r, err = os.Open("context.tar")
+	err = r.Close()
+	if err != nil {
+		lib.Logger.Fatal("error: ", err)
+	}
+	r, err = os.Open("/tmp/context.tar." + uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
 	out, err := cli.ImageBuild(ctx, r, types.ImageBuildOptions{
 		NoCache:    true,
-		Tags:       []string{args.OutName},
-		Dockerfile: "Dockerfile",
+		Tags:       []string{args.ContainerOut},
+		Dockerfile: "/tmp/Dockerfile." + uid,
+		Remove:     true,
 	})
+	defer func() { _ = out.Body.Close() }()
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -213,25 +230,28 @@ func minify() {
 	for scanner.Scan() {
 		err := json.Unmarshal(scanner.Bytes(), &val)
 		if err == nil {
-			fmt.Fprintf(os.Stderr, val["stream"])
+			lib.Logger.Println(strings.Trim(val["stream"], "\n"))
 		}
 	}
 	err = scanner.Err()
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+	if val["stream"] != "Successfully tagged "+args.ContainerOut+"\n" {
+		lib.Logger.Fatal("error: failed to build " + args.ContainerOut)
+	}
 	//
-	err = os.Remove("image.tar")
+	err = os.Remove("/tmp/image.tar." + uid)
 	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+		lib.Logger.Fatal("error: ", err)
 	}
-	err = os.Remove("context.tar")
+	err = os.Remove("/tmp/context.tar." + uid)
 	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+		lib.Logger.Fatal("error: ", err)
 	}
-	err = os.Remove("Dockerfile")
+	err = os.Remove("/tmp/Dockerfile." + uid)
 	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+		lib.Logger.Fatal("error: ", err)
 	}
 }
 

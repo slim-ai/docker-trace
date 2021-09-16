@@ -21,6 +21,14 @@ func (scanArgs) Description() string {
 	return "\nscan a container and dump metadata and utf8 content\n"
 }
 
+func valueOrDash(x interface{}) string {
+	y := fmt.Sprint(x)
+	if y == "" {
+		return "-"
+	}
+	return y
+}
+
 func scan() {
 	var args scanArgs
 	arg.MustParse(&args)
@@ -30,6 +38,12 @@ func scan() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	for _, file := range files {
-		fmt.Println(file.Path, file.LayerIndex, file.Size, fs.FileMode(file.Mode).String(), file.Hash)
+		fmt.Println(
+			valueOrDash(file.Path),
+			valueOrDash(file.LayerIndex),
+			valueOrDash(file.Size),
+			valueOrDash(fs.FileMode(file.Mode).String()),
+			valueOrDash(file.Hash),
+		)
 	}
 }

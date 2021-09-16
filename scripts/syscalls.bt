@@ -1,6 +1,0 @@
-#!/usr/bin/env bpftrace
-tracepoint:raw_syscalls:sys_enter
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{
-    printf("%d %s %d\n", pid, comm, args->id);
-}

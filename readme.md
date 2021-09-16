@@ -6,6 +6,12 @@ easily bpftrace a single unprivileged container from a privileged container
 
 bpftracing containers should be easy
 
+## install
+
+```
+go get github.com/nathants/docker-trace
+```
+
 ## example
 
 ![](./example.gif)
@@ -20,8 +26,8 @@ bpftracing containers should be easy
 
 # terminal 2
 
->> bash bpftrace.sh $(docker ps -q --no-trunc | head -n1) scripts/vfs.bt
-Attaching 17 probes...
+>> docker-trace files $(docker ps -q --no-trunc)
+Attaching 19 probes...
 
 # terminal 1
 
