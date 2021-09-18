@@ -347,6 +347,7 @@ func files() {
 	waitChan, errChan := cli.ContainerWait(ctx, out.ID, container.WaitConditionNextExit)
 	logs, err := cli.ContainerLogs(ctx, out.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
+		ShowStderr: true,
 		Follow:     true,
 	})
 	if err != nil {
@@ -354,14 +355,11 @@ func files() {
 	}
 	defer func() { _ = logs.Close() }()
 	buf := bufio.NewReader(logs)
-	line, err := buf.ReadString('\n')
+	line, err := buf.ReadBytes('\n')
 	if err != nil {
-		if err != io.EOF {
-			lib.Logger.Fatal("error:", err)
-		}
-		return
+		lib.Logger.Fatal("error: ", err)
 	}
-	fmt.Fprint(os.Stderr, line)
+	fmt.Fprint(os.Stderr, string(line[8:])) // bpftrace startup message to stderr: Attaching N probes...
 	for {
 		line, err := buf.ReadBytes('\n')
 		if err != nil {
@@ -370,7 +368,13 @@ func files() {
 			}
 			break
 		}
-		fmt.Print(string(line[8:])) // docker log uses the first 8 bytes for metadata
+		str := string(line[8:]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
+		switch line[0] {
+		case 1:
+			_, _ = fmt.Fprint(os.Stdout, str)
+		case 2:
+			_, _ = fmt.Fprint(os.Stderr, str)
+		}
 	}
 	select {
 	case err = <-errChan:
