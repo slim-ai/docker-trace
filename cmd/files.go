@@ -335,13 +335,16 @@ func files() {
 	for _, warn := range out.Warnings {
 		lib.Logger.Println(warn)
 	}
+	//
 	err = cli.ContainerStart(ctx, out.ID, types.ContainerStartOptions{})
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	lib.SignalHandler(func() {
 		_ = cli.ContainerKill(ctx, out.ID, "kill")
+		_ = os.RemoveAll(tempDir)
 	})
+	waitChan, errChan := cli.ContainerWait(ctx, out.ID, container.WaitConditionNextExit)
 	logs, err := cli.ContainerLogs(ctx, out.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
 		Follow:     true,
@@ -369,8 +372,12 @@ func files() {
 		}
 		fmt.Print(string(line[8:])) // docker log uses the first 8 bytes for metadata
 	}
-	err = os.RemoveAll(tempDir)
-	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+	select {
+	case err = <-errChan:
+		panic(err)
+	case wait := <-waitChan:
+		if wait.StatusCode != 0 {
+			os.Exit(1)
+		}
 	}
 }
