@@ -130,7 +130,7 @@ func files() {
 	//
 	files, err := ioutil.ReadDir("/sys/fs/cgroup/")
 	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+		lib.Logger.Fatal("error: ", err)
 	}
 	fail := true
 	for _, file := range files {
@@ -267,6 +267,46 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	kernel := strings.Trim(stdout.String(), "\n")
+	//
+	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/system.slice/docker-%s.scope", args.ContainerID)
+	if !lib.Exists(cgroupPath) {
+		run := func(cmd ...string) {
+			out, err := cli.ContainerCreate(
+				ctx,
+				&container.Config{
+					Cmd:   cmd,
+					Image: "docker-trace:bpftrace",
+				},
+				&container.HostConfig{
+					AutoRemove: true,
+					Binds:      []string{"/sys/fs/cgroup:/sys/fs/cgroup"},
+				},
+				&network.NetworkingConfig{},
+				&specs.Platform{Architecture: "amd64", OS: "linux"},
+				"docker-trace-mkdir-"+uid,
+			)
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
+			err = cli.ContainerStart(ctx, out.ID, types.ContainerStartOptions{})
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
+			waitChan, errChan := cli.ContainerWait(ctx, out.ID, container.WaitConditionNextExit)
+			select {
+			case err = <-errChan:
+				panic(err)
+			case wait := <-waitChan:
+				if wait.StatusCode != 0 {
+					os.Exit(1)
+				}
+			}
+		}
+		// to see all files, bpftrace needs to start before the container, but in that case the cgroup directory doesn't exist yet and must be created
+		run("mkdir", "-p", cgroupPath)
+		defer run("rm", "-rf", cgroupPath)
+	}
+	//
 	out, err := cli.ContainerCreate(
 		ctx,
 		&container.Config{
@@ -286,10 +326,7 @@ func files() {
 			SecurityOpt: []string{"no-new-privileges"},
 		},
 		&network.NetworkingConfig{},
-		&specs.Platform{
-			Architecture: "amd64",
-			OS:           "linux",
-		},
+		&specs.Platform{Architecture: "amd64", OS: "linux"},
 		"docker-trace-"+uid,
 	)
 	if err != nil {
