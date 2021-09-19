@@ -53,7 +53,7 @@ func unpack() {
 
 	manifest, err := lib.FindManifest(manifests, args.Name)
 	if err != nil {
-	    lib.Logger.Fatal("error: ", err)
+		lib.Logger.Fatal("error: ", err)
 	}
 
 	layerNames := make(map[string]string)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/alexflint/go-arg"
 	"github.com/docker/docker/api/types"
@@ -30,6 +31,7 @@ func init() {
 
 type filesArgs struct {
 	ContainerID string `arg:"positional,required"`
+	Start       bool   `arg:"-s,--start" help:"call docker-start on ContainerID"`
 }
 
 func (filesArgs) Description() string {
@@ -268,6 +270,7 @@ func files() {
 	}
 	kernel := strings.Trim(stdout.String(), "\n")
 	//
+	// to see all files, bpftrace needs to start before the container, but in that case the cgroup directory doesn't exist yet and must be created
 	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/system.slice/docker-%s.scope", args.ContainerID)
 	if !lib.Exists(cgroupPath) {
 		run := func(cmd ...string) {
@@ -302,7 +305,6 @@ func files() {
 				}
 			}
 		}
-		// to see all files, bpftrace needs to start before the container, but in that case the cgroup directory doesn't exist yet and must be created
 		run("mkdir", "-p", cgroupPath)
 		defer run("rm", "-rf", cgroupPath)
 	}
@@ -340,11 +342,28 @@ func files() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	lib.SignalHandler(func() {
+	//
+	cleanup := func() {
 		_ = cli.ContainerKill(ctx, out.ID, "kill")
 		_ = os.RemoveAll(tempDir)
-	})
-	waitChan, errChan := cli.ContainerWait(ctx, out.ID, container.WaitConditionNextExit)
+	}
+	lib.SignalHandler(cleanup)
+	//
+	errChanTracedContainer := make(chan error)
+	go func() {
+		waitChan, errChan := cli.ContainerWait(ctx, args.ContainerID, container.WaitConditionNextExit)
+		select {
+		case err := <-errChan:
+			errChanTracedContainer <- err
+		case wait := <-waitChan:
+			if wait.StatusCode != 0 {
+				errChanTracedContainer <- fmt.Errorf("traced container exited: %d", wait.StatusCode)
+			} else {
+				errChanTracedContainer <- nil
+			}
+		}
+	}()
+	//
 	logs, err := cli.ContainerLogs(ctx, out.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -354,34 +373,61 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	defer func() { _ = logs.Close() }()
+	//
 	buf := bufio.NewReader(logs)
 	line, err := buf.ReadBytes('\n')
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	fmt.Fprint(os.Stderr, string(line[8:])) // bpftrace startup message to stderr: Attaching N probes...
-	for {
-		line, err := buf.ReadBytes('\n')
+	if !(strings.HasPrefix(string(line[8:]), "Attaching ") && strings.HasSuffix(string(line[8:]), " probes...\n")) {
+		lib.Logger.Fatal("error: unexected startup log: %s", line)
+	}
+	fmt.Fprintln(os.Stderr, "ready")
+	//
+	if args.Start {
+		err = cli.ContainerStart(ctx, args.ContainerID, types.ContainerStartOptions{})
 		if err != nil {
-			if err != io.EOF {
-				lib.Logger.Fatal("error:", err)
-			}
-			break
-		}
-		str := string(line[8:]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
-		switch line[0] {
-		case 1:
-			_, _ = fmt.Fprint(os.Stdout, str)
-		case 2:
-			_, _ = fmt.Fprint(os.Stderr, str)
+			lib.Logger.Fatal("error: ", err)
 		}
 	}
-	select {
-	case err = <-errChan:
-		panic(err)
-	case wait := <-waitChan:
-		if wait.StatusCode != 0 {
-			os.Exit(1)
+	//
+	errChanLogs := make(chan error)
+	go func() {
+		cwds := make(map[string]string)
+		for {
+			line, err := buf.ReadBytes('\n')
+			if err != nil {
+				errChanLogs <- err
+				return
+			}
+			str := string(line[8 : len(line)-1]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
+			switch line[0] {
+			case 1:
+				lib.FilesHandleLine(cwds, str)
+			case 2:
+				_, _ = fmt.Fprint(os.Stderr, str)
+			}
+			errChanLogs <- nil
+		}
+	}()
+	//
+	for {
+		select {
+		case err := <-errChanLogs:
+			if err != nil {
+				cleanup()
+				if err != io.EOF {
+					lib.Logger.Fatal("error:", err)
+				}
+				return
+			}
+		case <-time.After(1 * time.Second): // once trace container has exited, wait 1 second for logs before exiting
+			select {
+			case <-errChanTracedContainer:
+				cleanup()
+				return
+			default:
+			}
 		}
 	}
 }

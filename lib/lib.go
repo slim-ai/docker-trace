@@ -431,7 +431,7 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 				}
 				configs[header.Name] = &config
 			}
-
+		default:
 		}
 	}
 
@@ -469,4 +469,69 @@ func Max(i, j int) int {
 		return i
 	}
 	return j
+}
+
+type File struct {
+	Syscall string
+	Pid     string
+	Ppid    string
+	Comm    string
+	Errno   string
+	File    string
+}
+
+func FilesParseLine(line string) File {
+	parts := strings.Split(line, "\t")
+	if len(parts) != 6 {
+		panic(len(parts))
+	}
+	file := File{}
+	file.Syscall = parts[0]
+	file.Pid = parts[1]
+	file.Ppid = parts[2]
+	file.Comm = parts[3]
+	file.Errno = parts[4]
+	file.File = parts[5]
+	return file
+}
+
+func FilesHandleLine(cwds map[string]string, line string) {
+	file := FilesParseLine(line)
+	skip := strings.HasPrefix(file.Comm, "runc:[")
+	skip = skip || file.Comm == "7"
+	skip = skip || file.File == "."
+	skip = skip || strings.HasPrefix(file.File, "/proc/")
+	skip = skip || strings.HasPrefix(file.File, "/dev/")
+	skip = skip || file.File == ""
+	if !skip {
+		// track cwd by pid
+		_, ok := cwds[file.Pid]
+		if !ok {
+			_, ok := cwds[file.Ppid]
+			if ok {
+				cwds[file.Pid] = cwds[file.Ppid]
+			} else {
+				cwds[file.Pid] = "/"
+			}
+		}
+		if file.Syscall == "chdir" {
+			if file.File[:1] == "/" {
+				cwds[file.Pid] = file.File
+			} else {
+				cwds[file.Pid] = path.Join(cwds[file.Pid], file.File)
+			}
+		}
+		// join any relative paths to pid cwd
+		if file.File[:1] != "/" {
+			cwd, ok := cwds[file.Pid]
+			if !ok {
+				panic(cwds)
+			}
+			file.File = path.Join(cwd, file.File)
+		}
+		//
+		// _, _ = fmt.Fprintln(os.Stderr, file.Pid, file.Ppid, fmt.Sprintf("%-40s", file.File), fmt.Sprintf("%-10s", file.Comm), file.Errno, file.Syscall)
+		// fmt.Fprintln(os.Stderr, Pformat(cwds))
+		fmt.Println(file.File)
+	}
 }

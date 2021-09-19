@@ -308,6 +308,7 @@ func minifyLayer(layer string, r io.Reader, tw *tar.Writer, layers map[string]in
 			if err != nil {
 				lib.Logger.Fatal("error: ", err)
 			}
+		default:
 		}
 	}
 }
