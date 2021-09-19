@@ -10,8 +10,6 @@ import (
 	"github.com/nathants/docker-trace/lib"
 )
 
-
-
 func usage() {
 	var fns []string
 	maxLen := 0
