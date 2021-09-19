@@ -30,5 +30,3 @@ docker create -it --rm archlinux bash # terminal 1
 docker-trace files $container_id      # terminal 2
 docker start -ia $container_id        # terminal 1
 ```
-id=$(docker create)
-- docker-trace files $ID

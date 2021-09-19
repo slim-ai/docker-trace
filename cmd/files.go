@@ -58,6 +58,10 @@ const filesBpftrace = `#!/usr/bin/env bpftrace
 
 // ENTER
 
+tracepoint:syscalls:sys_enter_exec*
+/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
+{ printf("exec\t%d\t%d\t%s\t0\t%s\n", pid, curtask->real_parent->pid, comm, str(args->filename)); }
+
 tracepoint:syscalls:sys_enter_statfs,
 tracepoint:syscalls:sys_enter_readlinkat
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
@@ -70,6 +74,7 @@ tracepoint:syscalls:sys_enter_readlink
 tracepoint:syscalls:sys_enter_newfstatat,
 tracepoint:syscalls:sys_enter_chdir,
 tracepoint:syscalls:sys_enter_open,
+tracepoint:syscalls:sys_enter_access,
 tracepoint:syscalls:sys_enter_openat,
 tracepoint:syscalls:sys_enter_statx,
 tracepoint:syscalls:sys_enter_newstat,
@@ -86,6 +91,10 @@ tracepoint:syscalls:sys_exit_newfstatat
 tracepoint:syscalls:sys_exit_chdir
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
 { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("chdir\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+
+tracepoint:syscalls:sys_exit_access
+/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
+{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("access\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
 
 tracepoint:syscalls:sys_exit_open
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
@@ -314,6 +323,7 @@ func files() {
 		&container.Config{
 			Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
 			Image: "docker-trace:bpftrace",
+			Env: []string{"BPFTRACE_STRLEN=200"},
 		},
 		&container.HostConfig{
 			AutoRemove: true,
@@ -345,6 +355,9 @@ func files() {
 	//
 	cleanup := func() {
 		_ = cli.ContainerKill(ctx, out.ID, "kill")
+		if args.Start {
+			_ = cli.ContainerKill(ctx, args.ContainerID, "kill")
+		}
 		_ = os.RemoveAll(tempDir)
 	}
 	lib.SignalHandler(cleanup)
@@ -380,7 +393,7 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	if !(strings.HasPrefix(string(line[8:]), "Attaching ") && strings.HasSuffix(string(line[8:]), " probes...\n")) {
-		lib.Logger.Fatal("error: unexected startup log: %s", line)
+		lib.Logger.Fatalf("error: unexected startup log: %s", string(line))
 	}
 	fmt.Fprintln(os.Stderr, "ready")
 	//

@@ -51,6 +51,7 @@ func minify() {
 	}
 	for _, path := range strings.Split(string(bytes), "\n") {
 		path = strings.Trim(path, " ")
+		path = strings.ReplaceAll(path, "//", "/")
 		if path != "" {
 			includePaths[path] = nil
 		}
@@ -58,10 +59,53 @@ func minify() {
 	//
 	includeFiles := make(map[string]*lib.ScanFile)
 	var last *lib.ScanFile
+	links := make(map[string]string)
 	for _, f := range files {
-		_, ok := includePaths[f.Path]
+		if f.LinkTarget != "" {
+			links[f.Path] = f.LinkTarget
+		}
+	}
+	//
+	// recursively resolve all symlinks
+	for p := range includePaths {
+		last := ""
+		for {
+			if last == p {
+				break // break when no further change
+			}
+			last = p
+			parts := strings.Split(strings.TrimLeft(p, "/"), "/")
+			for i := 0; i <= len(parts); i++ {
+				subPath := "/" + path.Join(parts[:i]...)
+				link, ok := links[subPath]
+				if ok {
+					if link[:1] != "/" {
+						link = path.Join(path.Dir(subPath), link)
+					}
+					includePaths[subPath] = nil
+					includePaths[link] = nil
+					for j := range parts[:i] {
+						parts[j] = ""
+					}
+					parts[0] = link
+				}
+			}
+			p2 := path.Join(parts...)
+			includePaths[p2] = nil
+			p = p2
+		}
+	}
+	//
+	for _, f := range files {
+		_, ok := includePaths[strings.TrimRight(f.Path, "/")]
 		if !ok {
-			continue
+			atRoot := len(strings.Split(f.Path, "/")) == 2 && f.LinkTarget != "" // always include root level symlinks
+			ldHackArch := strings.HasPrefix(f.Path, "/usr/lib/ld-") // why is bpftrace missing this access? repro: sh -c whoami
+			ldHackAlpine := strings.HasPrefix(f.Path, "/lib/ld-") // why is bpftrace missing this access? repro: sh -c whoami
+			if !(atRoot || ldHackArch || ldHackAlpine) {
+				continue
+			}
+			includePaths[f.Path] = nil
 		}
 		if last != nil && f.Path != last.Path {
 			includeFiles[last.Path] = last

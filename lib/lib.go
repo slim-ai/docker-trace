@@ -359,6 +359,16 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 				Uid:        header.Uid,
 				Gid:        header.Gid,
 			})
+		case tar.TypeLink:
+			result = append(result, &ScanFile{
+				Layer:      layer,
+				Path:       "/" + header.Name,
+				Mode:       header.FileInfo().Mode(),
+				ModTime:    header.ModTime,
+				LinkTarget: header.Linkname,
+				Uid:        header.Uid,
+				Gid:        header.Gid,
+			})
 		case tar.TypeDir:
 			result = append(result, &ScanFile{
 				Layer:   layer,
@@ -368,6 +378,8 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 				Uid:     header.Uid,
 				Gid:     header.Gid,
 			})
+		default:
+			fmt.Fprintln(os.Stderr, "skipped:", string(header.Typeflag), header.Name)
 		}
 	}
 	return result, nil
@@ -497,13 +509,7 @@ func FilesParseLine(line string) File {
 
 func FilesHandleLine(cwds map[string]string, line string) {
 	file := FilesParseLine(line)
-	skip := strings.HasPrefix(file.Comm, "runc:[")
-	skip = skip || file.Comm == "7"
-	skip = skip || file.File == "."
-	skip = skip || strings.HasPrefix(file.File, "/proc/")
-	skip = skip || strings.HasPrefix(file.File, "/dev/")
-	skip = skip || file.File == ""
-	if !skip {
+	if file.File != "" {
 		// track cwd by pid
 		_, ok := cwds[file.Pid]
 		if !ok {
@@ -531,7 +537,6 @@ func FilesHandleLine(cwds map[string]string, line string) {
 		}
 		//
 		// _, _ = fmt.Fprintln(os.Stderr, file.Pid, file.Ppid, fmt.Sprintf("%-40s", file.File), fmt.Sprintf("%-10s", file.Comm), file.Errno, file.Syscall)
-		// fmt.Fprintln(os.Stderr, Pformat(cwds))
 		fmt.Println(file.File)
 	}
 }

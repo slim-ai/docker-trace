@@ -45,6 +45,7 @@ func scan() {
 			valueOrDash(file.Size),
 			valueOrDash(fs.FileMode(file.Mode).String()),
 			valueOrDash(file.Hash),
+			valueOrDash(file.LinkTarget),
 		)
 	}
 }
