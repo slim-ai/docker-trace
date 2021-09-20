@@ -1,10 +1,10 @@
 ## what
 
-analyze and minimize the filesystem of a container
+analyze and minimize the filesystem of a container.
 
 ## why
 
-containers have too much stuff in them
+containers have too much stuff in them.
 
 ## install
 
