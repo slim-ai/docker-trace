@@ -44,4 +44,4 @@ check-vet: check-deps
 	@go vet ./...
 
 test:
-	go test -v lib/*.go
+	go test --timeout 1h -v lib/*.go

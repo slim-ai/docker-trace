@@ -1,0 +1,12 @@
+FROM alpine:latest
+
+RUN apk update && \
+    apk add go openssl
+
+RUN openssl req -x509 -nodes -newkey rsa:4096 -keyout ssl.key -out ssl.crt -days 9999 -subj "/CN=localhost/O=Fake Name/C=US"
+
+COPY main.go /
+
+RUN go build main.go
+
+CMD ["./main"]

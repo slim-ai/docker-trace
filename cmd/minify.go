@@ -99,10 +99,9 @@ func minify() {
 	for _, f := range files {
 		_, ok := includePaths[strings.TrimRight(f.Path, "/")]
 		if !ok {
-			atRoot := len(strings.Split(f.Path, "/")) == 2 && f.LinkTarget != "" // always include root level symlinks
-			ldHackArch := strings.HasPrefix(f.Path, "/usr/lib/ld-") // why is bpftrace missing this access? repro: sh -c whoami
-			ldHackAlpine := strings.HasPrefix(f.Path, "/lib/ld-") // why is bpftrace missing this access? repro: sh -c whoami
-			if !(atRoot || ldHackArch || ldHackAlpine) {
+			atRoot := len(strings.Split(f.Path, "/")) == 2 && f.LinkTarget != ""                                                       // always include root level symlinks
+			ldSo := strings.Contains(f.Path, "/lib") && strings.HasPrefix(path.Base(f.Path), "ld-") && strings.Contains(f.Path, ".so") // why is bpftrace always missing this one file: /lib/ld-*.so*
+			if !(atRoot || ldSo) {
 				continue
 			}
 			includePaths[f.Path] = nil

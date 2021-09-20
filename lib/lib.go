@@ -379,7 +379,7 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 				Gid:     header.Gid,
 			})
 		default:
-			fmt.Fprintln(os.Stderr, "skipped:", string(header.Typeflag), header.Name)
+			// fmt.Fprintln(os.Stderr, "skipped:", string(header.Typeflag), header.Name)
 		}
 	}
 	return result, nil
@@ -494,10 +494,11 @@ type File struct {
 
 func FilesParseLine(line string) File {
 	parts := strings.Split(line, "\t")
-	if len(parts) != 6 {
-		panic(len(parts))
-	}
 	file := File{}
+	if len(parts) != 6 {
+		Logger.Printf("skipping bpftrace line: %s\n", line)
+		return file
+	}
 	file.Syscall = parts[0]
 	file.Pid = parts[1]
 	file.Ppid = parts[2]

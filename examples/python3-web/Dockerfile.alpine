@@ -1,7 +1,7 @@
 FROM alpine:latest
 
 RUN apk update && \
- apk add python3 openssl git
+    apk add python3 openssl git
 
 RUN python3 -m ensurepip
 
@@ -13,4 +13,4 @@ RUN python3 -m pip install git+https://github.com/nathants/py-util && \
 
 COPY app.py /
 
-CMD python3 app.py
+CMD ["python3", "app.py"]

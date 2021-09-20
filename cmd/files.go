@@ -323,7 +323,7 @@ func files() {
 		&container.Config{
 			Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
 			Image: "docker-trace:bpftrace",
-			Env: []string{"BPFTRACE_STRLEN=200"},
+			Env:   []string{"BPFTRACE_STRLEN=200"},
 		},
 		&container.HostConfig{
 			AutoRemove: true,

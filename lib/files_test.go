@@ -15,12 +15,12 @@ import (
 	"testing"
 )
 
-func md5Sum(bytes []byte) string {
+func md5SumFiles(bytes []byte) string {
 	hash := md5.Sum(bytes)
 	return hex.EncodeToString(hash[:])
 }
 
-func runStdout(command ...string) (string, error) {
+func runStdoutFiles(command ...string) (string, error) {
 	cmd := exec.Command(command[0], command[1:]...)
 	var stdout bytes.Buffer
 	cmd.Stderr = os.Stderr
@@ -29,14 +29,14 @@ func runStdout(command ...string) (string, error) {
 	return strings.Trim(stdout.String(), "\n"), err
 }
 
-func run(command ...string) error {
+func runFiles(command ...string) error {
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	return cmd.Run()
 }
 
-func runQuiet(command ...string) error {
+func runQuietFiles(command ...string) error {
 	cmd := exec.Command(command[0], command[1:]...)
 	return cmd.Run()
 }
@@ -46,9 +46,9 @@ FROM archlinux:latest
 RUN pacman -Syu --noconfirm go python gcc
 `
 
-var container = fmt.Sprintf("docker-trace:test-%s", md5Sum([]byte(dockerfile)))
+var containerFiles = fmt.Sprintf("docker-trace:test-%s", md5SumFiles([]byte(dockerfile)))
 
-func climbGitRoot() {
+func climbGitRootFiles() {
 	_, filename, _, _ := runtime.Caller(1)
 	err := os.Chdir(path.Dir(filename))
 	if err != nil {
@@ -75,8 +75,8 @@ outer:
 	}
 }
 
-func ensureTestContainer() {
-	if runQuiet("docker", "inspect", container) != nil {
+func ensureTestContainerFiles() {
+	if runQuietFiles("docker", "inspect", containerFiles) != nil {
 		dir, err := ioutil.TempDir("", "docker-trace-test.")
 		if err != nil {
 			panic(err)
@@ -85,7 +85,7 @@ func ensureTestContainer() {
 		if err != nil {
 			panic(err)
 		}
-		err = run("docker", "build", "-t", container, "--network", "host", dir)
+		err = runFiles("docker", "build", "-t", containerFiles, "--network", "host", dir)
 		if err != nil {
 			panic(err)
 		}
@@ -96,27 +96,27 @@ func ensureTestContainer() {
 	}
 }
 
-func ensureDockerTrace() {
-	err := run("go", "build", ".")
+func ensureDockerTraceFiles() {
+	err := runFiles("go", "build", ".")
 	if err != nil {
 		panic(err)
 	}
 }
 
-func ensureSetup() {
-	climbGitRoot()
-	ensureTestContainer()
-	ensureDockerTrace()
+func ensureSetupFiles() {
+	climbGitRootFiles()
+	ensureTestContainerFiles()
+	ensureDockerTraceFiles()
 }
 
 func TestTraceCat(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "bash", "-c", "cat /etc/hosts")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cat /etc/hosts")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -130,13 +130,13 @@ func TestTraceCat(t *testing.T) {
 }
 
 func TestTraceCdCat(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "bash", "-c", "cd /etc && cat hosts")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && cat hosts")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -150,13 +150,13 @@ func TestTraceCdCat(t *testing.T) {
 }
 
 func TestTraceCdBashCat(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "bash", "-c", "cd /etc && bash -c \"cat hosts\"")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && bash -c \"cat hosts\"")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -170,13 +170,13 @@ func TestTraceCdBashCat(t *testing.T) {
 }
 
 func TestTracePythonOpen(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "python", "-c", "open('/etc/hosts')")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "open('/etc/hosts')")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -190,13 +190,13 @@ func TestTracePythonOpen(t *testing.T) {
 }
 
 func TestTraceBashCdPythonOpen(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "bash", "-c", "cd /etc && python -c \"open('hosts')\"")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && python -c \"open('hosts')\"")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -210,13 +210,13 @@ func TestTraceBashCdPythonOpen(t *testing.T) {
 }
 
 func TestTracePythonCdOpen(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "python", "-c", "import os; os.chdir('/etc'); open('hosts')")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "import os; os.chdir('/etc'); open('hosts')")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -230,13 +230,13 @@ func TestTracePythonCdOpen(t *testing.T) {
 }
 
 func TestTracePythonCdStat(t *testing.T) {
-	ensureSetup()
-	id, err := runStdout("docker", "create", "-t", "--rm", container, "python", "-c", "import os; os.chdir('/etc'); os.stat('hosts')")
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "import os; os.chdir('/etc'); os.stat('hosts')")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -250,7 +250,7 @@ func TestTracePythonCdStat(t *testing.T) {
 }
 
 func TestTraceGoOpen(t *testing.T) {
-	ensureSetup()
+	ensureSetupFiles()
 	dir, err := ioutil.TempDir("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
@@ -279,12 +279,12 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdout("docker", "create", "-t", "-v", dir+":/code", "--rm", container, "go", "run", "/code/main.go")
+	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -298,7 +298,7 @@ func main() {
 }
 
 func TestTraceGoCdOpen(t *testing.T) {
-	ensureSetup()
+	ensureSetupFiles()
 	dir, err := ioutil.TempDir("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
@@ -331,12 +331,12 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdout("docker", "create", "-t", "-v", dir+":/code", "--rm", container, "go", "run", "/code/main.go")
+	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return
@@ -350,7 +350,7 @@ func main() {
 }
 
 func TestTraceGoCdStat(t *testing.T) {
-	ensureSetup()
+	ensureSetupFiles()
 	dir, err := ioutil.TempDir("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
@@ -383,12 +383,12 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdout("docker", "create", "-t", "-v", dir+":/code", "--rm", container, "go", "run", "/code/main.go")
+	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	stdout, err := runStdout("./docker-trace", "files", id, "--start")
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
 	if err != nil {
 		t.Error(err)
 		return

@@ -1,10 +1,8 @@
 FROM archlinux:latest
 
-RUN pacman -Syu --noconfirm python-pip openssl
+RUN pacman -Syu --noconfirm python-pip openssl git
 
 RUN openssl req -x509 -nodes -newkey rsa:4096 -keyout ssl.key -out ssl.crt -days 9999 -subj "/CN=localhost/O=Fake Name/C=US"
-
-RUN pacman -Syu --noconfirm git
 
 RUN pip install git+https://github.com/nathants/py-util && \
     pip install git+https://github.com/nathants/py-pool && \
@@ -12,4 +10,4 @@ RUN pip install git+https://github.com/nathants/py-util && \
 
 COPY app.py /
 
-CMD python app.py
+CMD ["python3", "app.py"]
