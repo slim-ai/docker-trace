@@ -31,17 +31,15 @@ unpack     - unpack a container into directories and files
 ## usage
 
 ```
->> docker create -it --rm archlinux bash # terminal 1
->> docker-trace files $container_id      # terminal 1
->> docker start -ia $container_id        # terminal 2
+>> docker create -it --rm archlinux bash
+>> docker-trace files --start $container_id
 ```
 
 ## minification
 
 ```
->> docker create -it --rm archlinux bash                                                 # terminal 1
->> docker-trace files $container_id | docker-trace minify archlinux:latest archlinux:min # terminal 1
->> docker start -ia $container_id                                                        # terminal 2
+>> docker create -it --rm archlinux bash
+>> docker-trace files --start $container_id | docker-trace minify archlinux:latest archlinux:min
 ```
 
 ## minification results from tests
