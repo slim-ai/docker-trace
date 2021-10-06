@@ -31,15 +31,31 @@ unpack     - unpack a container into directories and files
 ## usage
 
 ```
->> docker create -it --rm archlinux bash
->> docker-trace files --start $container_id
+>> id=$(docker create -it --rm archlinux:latest curl https://google.com)
+
+>> docker-trace files --start $id 2>/dev/null | grep ssl
+
+/usr/lib/libssl.so.1.1
+/etc/ssl/openssl.cnf
+/etc/ssl/certs/ca-certificates.crt
 ```
 
 ## minification
 
 ```
->> docker create -it --rm archlinux bash
->> docker-trace files --start $container_id | docker-trace minify archlinux:latest archlinux:min
+>> id=$(docker create -it --rm archlinux:latest curl https://google.com)
+
+>> docker-trace files --start $id | docker-trace minify archlinux:latest archlinux:curl-https-minifed
+
+>> docker images | grep archlinux
+
+archlinux    curl-https-minifed    cbdc450d4009    23 seconds ago    16.1MB
+archlinux    latest                1d6f90387c13    5 weeks ago       381MB
+
+>> docker run -it --rm archlinux:curl-https-minifed curl -v https://google.com | grep '< HTTP'
+
+< HTTP/2 301
+
 ```
 
 ## minification results from tests
