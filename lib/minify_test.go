@@ -18,6 +18,14 @@ import (
 	"time"
 )
 
+func atoi(x string) int {
+	y, err := strconv.Atoi(x)
+	if err != nil {
+		panic(err)
+	}
+	return y
+}
+
 func md5SumMinify(bytes []byte) string {
 	hash := md5.Sum(bytes)
 	return hex.EncodeToString(hash[:])
@@ -134,8 +142,13 @@ func testWeb(t *testing.T, app, kind string) {
 	}()
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		IdleConnTimeout: 1*time.Second,
+		TLSHandshakeTimeout: 1*time.Second,
 	}
-	client := &http.Client{Transport: tr}
+	client := &http.Client{
+		Transport: tr,
+		Timeout: 1*time.Second,
+	}
 	//
 	start := time.Now()
 	for {
@@ -277,12 +290,4 @@ func TestNodeWebUbuntu(t *testing.T) {
 
 func TestNodeWebAmzn(t *testing.T) {
 	testWeb(t, "node-web", "amzn")
-}
-
-func atoi(x string) int {
-	y, err := strconv.Atoi(x)
-	if err != nil {
-		panic(err)
-	}
-	return y
 }

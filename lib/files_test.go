@@ -400,3 +400,28 @@ func main() {
 		return
 	}
 }
+
+func TestTraceCdFailCat(t *testing.T) {
+	ensureSetupFiles()
+	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /fake; cat hosts")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	files := strings.Split(stdout, "\n")
+	if Contains(files, "/fake/hosts") {
+		fmt.Println(stdout)
+		t.Errorf("found /fake/hosts")
+		return
+	}
+	if Contains(files, "/hosts") {
+		fmt.Println(stdout)
+		t.Errorf("found /hosts")
+		return
+	}
+}

@@ -510,7 +510,7 @@ func FilesParseLine(line string) File {
 
 func FilesHandleLine(cwds map[string]string, line string) {
 	file := FilesParseLine(line)
-	if file.File != "" {
+	if file.File != "" && file.Errno == "0" {
 		// track cwd by pid
 		_, ok := cwds[file.Pid]
 		if !ok {
