@@ -62,7 +62,7 @@ tracepoint:syscalls:sys_enter_exec*
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
 { printf("exec\t%d\t%d\t%s\t0\t%s\n", pid, curtask->real_parent->pid, comm, str(args->filename)); }
 
-tracepoint:syscalls:sys_enter_create,
+tracepoint:syscalls:sys_enter_creat,
 tracepoint:syscalls:sys_enter_statfs,
 tracepoint:syscalls:sys_enter_readlinkat
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
@@ -74,8 +74,6 @@ tracepoint:syscalls:sys_enter_truncate
 { @filename[tid] = args->path; }
 
 tracepoint:syscalls:sys_enter_utimensat,
-tracepoint:syscalls:sys_enter_newfstatat,
-tracepoint:syscalls:sys_enter_newfstat,
 tracepoint:syscalls:sys_enter_chdir,
 tracepoint:syscalls:sys_enter_open,
 tracepoint:syscalls:sys_enter_futimesat,
@@ -100,14 +98,6 @@ tracepoint:syscalls:sys_exit_utimensat
 tracepoint:syscalls:sys_exit_faccessat
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
 { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("faccessat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_newfstatat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newfstatat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_newfstat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newfstat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
 
 tracepoint:syscalls:sys_exit_chdir
 /cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
