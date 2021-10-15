@@ -12,19 +12,10 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
-
-func atoi(x string) int {
-	y, err := strconv.Atoi(x)
-	if err != nil {
-		panic(err)
-	}
-	return y
-}
 
 func md5SumMinify(bytes []byte) string {
 	hash := md5.Sum(bytes)
@@ -213,14 +204,14 @@ func testWeb(t *testing.T, app, kind string) {
 		t.Error(err)
 		return
 	}
-	size := atoi(stdout)
+	size := lib.Atoi(stdout)
 	//
 	stdout, err = runStdoutMinify("docker", "inspect", container+"-min", "-f", "{{.Size}}")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	sizeMin := atoi(stdout)
+	sizeMin := lib.Atoi(stdout)
 	if !(sizeMin < size) {
 		t.Error("not smaller")
 		return

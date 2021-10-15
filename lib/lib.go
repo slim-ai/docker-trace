@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +26,14 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/mattn/go-isatty"
 )
+
+func Atoi(x string) int {
+	y, err := strconv.Atoi(x)
+	if err != nil {
+		panic(err)
+	}
+	return y
+}
 
 var Commands = make(map[string]func())
 
