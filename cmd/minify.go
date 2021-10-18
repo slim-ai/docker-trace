@@ -36,6 +36,8 @@ func (minifyArgs) Description() string {
 func minify() {
 	var args minifyArgs
 	arg.MustParse(&args)
+	//
+	lib.Logger.Println("start minification", args.ContainerIn, "=>", args.ContainerOut)
 	ctx := context.Background()
 	uid := uuid.NewV4().String()
 	//
@@ -44,11 +46,13 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
+	lib.Logger.Println("parse include paths")
+	//
 	// most contains break without these files
 	includePaths := map[string]interface{}{
 		"/usr/bin/env": nil,
-		"/bin/bash": nil,
-		"/bin/sh": nil,
+		"/bin/bash":    nil,
+		"/bin/sh":      nil,
 	}
 	bytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -61,6 +65,8 @@ func minify() {
 			includePaths[path] = nil
 		}
 	}
+	//
+	lib.Logger.Println("recursively resolve symlinks")
 	//
 	includeFiles := make(map[string]*lib.ScanFile)
 	var last *lib.ScanFile
@@ -101,6 +107,8 @@ func minify() {
 		}
 	}
 	//
+	lib.Logger.Println("update include paths for ld-*.so and symlinks at root")
+	//
 	for _, f := range files {
 		_, ok := includePaths[strings.TrimRight(f.Path, "/")]
 		if !ok {
@@ -122,6 +130,8 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+	//
+	lib.Logger.Println("start reading input container")
 	//
 	r, err := cli.ImageSave(ctx, []string{args.ContainerIn})
 	if err != nil {
@@ -147,6 +157,7 @@ func minify() {
 		switch header.Typeflag {
 		case tar.TypeReg:
 			if path.Base(header.Name) == "layer.tar" {
+				lib.Logger.Println("read layer", header.Name)
 				minifyLayer(header.Name, tr, tw, layers, includeFiles)
 			}
 		}
@@ -159,6 +170,8 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+	//
+	lib.Logger.Println("create minified dockerfile")
 	//
 	f, err := os.OpenFile("/tmp/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
@@ -186,6 +199,8 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+	//
+	lib.Logger.Println("create build context")
 	//
 	w, err = os.OpenFile("/tmp/context.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
@@ -263,6 +278,8 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
+	lib.Logger.Println("build minified image")
+	//
 	out, err := cli.ImageBuild(ctx, r, types.ImageBuildOptions{
 		NoCache:    true,
 		Tags:       []string{args.ContainerOut},
@@ -302,6 +319,7 @@ func minify() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+	lib.Logger.Println("minification complete")
 }
 
 func minifyLayer(layer string, r io.Reader, tw *tar.Writer, layers map[string]int, includeFiles map[string]*lib.ScanFile) {
