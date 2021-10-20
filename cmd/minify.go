@@ -44,7 +44,12 @@ func minify() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	includePaths := make(map[string]interface{})
+	// most contains break without these files
+	includePaths := map[string]interface{}{
+		"/usr/bin/env": nil,
+		"/bin/bash": nil,
+		"/bin/sh": nil,
+	}
 	bytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
