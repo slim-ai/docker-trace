@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -471,14 +472,19 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 	var result []string
 
 	for _, h := range config.History {
-		if strings.Contains(h.CreatedBy, " #(nop) ") {
-			line := h.CreatedBy
-			line = strings.Split(line, " #(nop) ")[1]
-			line = strings.TrimLeft(line, " ")
-			line = strings.ReplaceAll(line, `" `, `", `)
-			if !strings.HasPrefix(line, "ADD ") && !strings.HasPrefix(line, "COPY ") && !strings.HasPrefix(line, "LABEL ") && line != `CMD ["bash"]` {
-				result = append(result, line)
+		line := h.CreatedBy
+		line = last(strings.Split(line, " #(nop) "))
+		line = strings.Split(line, " # buildkit")[0]
+		line = strings.TrimLeft(line, " ")
+		line = strings.ReplaceAll(line, `" `, `", `)
+		regex := regexp.MustCompile(`^[A-Z]`)
+		if regex.FindString(line) != "" && !strings.HasPrefix(line, "ADD ") && !strings.HasPrefix(line, "COPY ") && !strings.HasPrefix(line, "RUN ") && !strings.HasPrefix(line, "LABEL ") {
+			if strings.HasPrefix(line, "EXPOSE ") && strings.Contains(line, " map[") {
+				regex := regexp.MustCompile(`[0-9]+`)
+				ports := regex.FindAllString("EXPOSE map[8080/4545]", -1)
+				line = "EXPOSE " + strings.Join(ports, " ")
 			}
+			result = append(result, line)
 		}
 	}
 	return result, nil
@@ -522,10 +528,10 @@ func FilesParseLine(line string) File {
 	//
 	if strings.Contains(file.File, "/overlay2/") {
 		file.File = last(strings.Split(file.File, "/overlay2/"))
-		file.File =  "/" + strings.Join(strings.Split(file.File, "/")[2:], "/")
+		file.File = "/" + strings.Join(strings.Split(file.File, "/")[2:], "/")
 	} else if strings.Contains(file.File, "/zfs/graph/") {
 		file.File = last(strings.Split(file.File, "/zfs/graph/"))
-		file.File =  "/" + strings.Join(strings.Split(file.File, "/")[1:], "/")
+		file.File = "/" + strings.Join(strings.Split(file.File, "/")[1:], "/")
 	}
 	//
 	return file
@@ -544,7 +550,7 @@ func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 		//
 		part := last(strings.Split(file.File, "/"))
 		if strings.HasPrefix(part, "docker-") {
-			cgroups[file.Cgroup] = part[7:64+7]
+			cgroups[file.Cgroup] = part[7 : 64+7]
 		}
 	} else if cgroups[file.Cgroup] != "" && file.File != "" && file.Errno == "0" {
 		// pids start at cwd of parent
