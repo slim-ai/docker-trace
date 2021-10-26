@@ -18,7 +18,7 @@ containers have too much stuff in them.
 >> docker-trace -h
 
 dockerfile - scan a container and print the dockerfile
-files      - bpftrace filesystem access in a running container
+files      - bpftrace filesystem access in running container
 minify     - minify a container keeping files passed on stdin
 scan       - scan a container and list filesystem contents
 unpack     - unpack a container into directories and files
@@ -31,21 +31,29 @@ unpack     - unpack a container into directories and files
 ## usage
 
 ```
->> id=$(docker create -it --rm archlinux:latest curl https://google.com)
 
->> docker-trace files --start $id 2>/dev/null | grep ssl
+>> docker-trace files > /tmp/trace.txt &
 
-/usr/lib/libssl.so.1.1
-/etc/ssl/openssl.cnf
-/etc/ssl/certs/ca-certificates.crt
+>> docker run -it --rm archlinux:latest curl https://google.com
+
+>> cat /tmp/trace.txt | grep -e ssl -e curl | head
+
+a1a54371 /usr/sbin/curl
+a1a54371 /usr/lib/libcurl.so.4
+a1a54371 /usr/lib/libssl.so.1.1
+a1a54371 /etc/ssl/openssl.cnf
+
 ```
 
 ## minification
 
 ```
->> id=$(docker create -it --rm archlinux:latest curl https://google.com)
 
->> docker-trace files --start $id | docker-trace minify archlinux:latest archlinux:curl-https-minifed
+>> docker-trace files > /tmp/trace.txt &
+
+>> docker run -it --rm archlinux:latest curl https://google.com
+
+>> cat /tmp/trace.txt | awk '{print $2}' | docker-trace minify archlinux:latest archlinux:curl-https-minifed
 
 >> docker images | grep archlinux
 
@@ -61,50 +69,50 @@ archlinux    latest                1d6f90387c13    5 weeks ago       381MB
 ## minification results from tests
 
 ```
->> docker images | grep web | sort | awk '{print $2 " " $7}'| column -t
+>> docker images --format '{{.Tag}} {{.Size}}'|grep web | sort | column -t
 
-minify-go-web-alpine-026be0e909d25e2e5019bf9a8e0047c0           468MB
-minify-go-web-alpine-026be0e909d25e2e5019bf9a8e0047c0-min       7.1MB
+minify-go-web-alpine-75b2c1029fa03869c64d4716e478a696           468MB
+minify-go-web-alpine-75b2c1029fa03869c64d4716e478a696-min       7.93MB
 
-minify-go-web-amzn-026be0e909d25e2e5019bf9a8e0047c0             1.1GB
-minify-go-web-amzn-026be0e909d25e2e5019bf9a8e0047c0-min         9MB
+minify-go-web-amzn-75b2c1029fa03869c64d4716e478a696             1.11GB
+minify-go-web-amzn-75b2c1029fa03869c64d4716e478a696-min         9.97MB
 
-minify-go-web-arch-026be0e909d25e2e5019bf9a8e0047c0             1GB
-minify-go-web-arch-026be0e909d25e2e5019bf9a8e0047c0-min         8.95MB
+minify-go-web-arch-75b2c1029fa03869c64d4716e478a696             995MB
+minify-go-web-arch-75b2c1029fa03869c64d4716e478a696-min         9.95MB
 
-minify-go-web-debian-026be0e909d25e2e5019bf9a8e0047c0           846MB
-minify-go-web-debian-026be0e909d25e2e5019bf9a8e0047c0-min       8.82MB
+minify-go-web-debian-75b2c1029fa03869c64d4716e478a696           847MB
+minify-go-web-debian-75b2c1029fa03869c64d4716e478a696-min       10.2MB
 
-minify-go-web-ubuntu-026be0e909d25e2e5019bf9a8e0047c0           703MB
-minify-go-web-ubuntu-026be0e909d25e2e5019bf9a8e0047c0-min       9.9MB
+minify-go-web-ubuntu-75b2c1029fa03869c64d4716e478a696           704MB
+minify-go-web-ubuntu-75b2c1029fa03869c64d4716e478a696-min       11.3MB
 
-minify-node-web-alpine-88fcdb538a144d54ec41b967f54c5e70         59.9MB
-minify-node-web-alpine-88fcdb538a144d54ec41b967f54c5e70-min     44.1MB
+minify-node-web-alpine-88fcdb538a144d54ec41b967f54c5e70         60.1MB
+minify-node-web-alpine-88fcdb538a144d54ec41b967f54c5e70-min     45.2MB
 
-minify-node-web-amzn-88fcdb538a144d54ec41b967f54c5e70           528MB
-minify-node-web-amzn-88fcdb538a144d54ec41b967f54c5e70-min       53.1MB
+minify-node-web-amzn-88fcdb538a144d54ec41b967f54c5e70           535MB
+minify-node-web-amzn-88fcdb538a144d54ec41b967f54c5e70-min       54MB
 
-minify-node-web-arch-88fcdb538a144d54ec41b967f54c5e70           609MB
-minify-node-web-arch-88fcdb538a144d54ec41b967f54c5e70-min       94.3MB
+minify-node-web-arch-88fcdb538a144d54ec41b967f54c5e70           591MB
+minify-node-web-arch-88fcdb538a144d54ec41b967f54c5e70-min       94.9MB
 
 minify-node-web-debian-88fcdb538a144d54ec41b967f54c5e70         960MB
-minify-node-web-debian-88fcdb538a144d54ec41b967f54c5e70-min     81.3MB
+minify-node-web-debian-88fcdb538a144d54ec41b967f54c5e70-min     82.7MB
 
-minify-node-web-ubuntu-88fcdb538a144d54ec41b967f54c5e70         655MB
-minify-node-web-ubuntu-88fcdb538a144d54ec41b967f54c5e70-min     66.7MB
+minify-node-web-ubuntu-88fcdb538a144d54ec41b967f54c5e70         656MB
+minify-node-web-ubuntu-88fcdb538a144d54ec41b967f54c5e70-min     68MB
 
 minify-python3-web-alpine-3255592eda8a6eede400c674466b5e4b      84.2MB
-minify-python3-web-alpine-3255592eda8a6eede400c674466b5e4b-min  15.8MB
+minify-python3-web-alpine-3255592eda8a6eede400c674466b5e4b-min  16.6MB
 
-minify-python3-web-amzn-3255592eda8a6eede400c674466b5e4b        645MB
-minify-python3-web-amzn-3255592eda8a6eede400c674466b5e4b-min    21.9MB
+minify-python3-web-amzn-3255592eda8a6eede400c674466b5e4b        652MB
+minify-python3-web-amzn-3255592eda8a6eede400c674466b5e4b-min    22.9MB
 
-minify-python3-web-arch-3255592eda8a6eede400c674466b5e4b        681MB
-minify-python3-web-arch-3255592eda8a6eede400c674466b5e4b-min    23.9MB
+minify-python3-web-arch-3255592eda8a6eede400c674466b5e4b        669MB
+minify-python3-web-arch-3255592eda8a6eede400c674466b5e4b-min    24.3MB
 
 minify-python3-web-debian-3255592eda8a6eede400c674466b5e4b      567MB
-minify-python3-web-debian-3255592eda8a6eede400c674466b5e4b-min  20.3MB
+minify-python3-web-debian-3255592eda8a6eede400c674466b5e4b-min  21.8MB
 
 minify-python3-web-ubuntu-3255592eda8a6eede400c674466b5e4b      459MB
-minify-python3-web-ubuntu-3255592eda8a6eede400c674466b5e4b-min  20.2MB
+minify-python3-web-ubuntu-3255592eda8a6eede400c674466b5e4b-min  21.5MB
 ```
