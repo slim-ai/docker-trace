@@ -119,14 +119,14 @@ func untarLayer(noRename bool, layerTar string, layerNames map[string]string) er
 		var ok bool
 		layerID, ok = layerNames[layerID]
 		if !ok {
-			return fmt.Errorf("error: %s %v", layerID, layerNames)
+			return fmt.Errorf("no layer match: %s %v", layerID, layerNames)
 		}
 	}
-	cmd := exec.Command("tar", "xf", "layer.tar")
+	cmd := exec.Command("tar", "--delay-directory-restore", "-xf", "layer.tar")
 	cmd.Dir = layerID
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("%w %s", err, layerID)
+		return fmt.Errorf("tar expansion failure: %w %s", err, layerID)
 	}
 	return nil
 }
