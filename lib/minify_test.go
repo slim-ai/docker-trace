@@ -1,11 +1,13 @@
 package lib
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/md5"
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -37,6 +40,47 @@ func runStdoutMinify(command ...string) (string, error) {
 	cmd.Stdout = &stdout
 	err := cmd.Run()
 	return strings.Trim(stdout.String(), "\n"), err
+}
+
+func runStdoutStderrChanMinify(command ...string) (<-chan string, <-chan string, func(), error) {
+	cmd := exec.Command(command[0], command[1:]...)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	stderrChan := make(chan string)
+	stdoutChan := make(chan string, 1024*1024)
+	tail := func(c chan<- string, r io.ReadCloser) {
+		buf := bufio.NewReader(r)
+		for {
+			line, err := buf.ReadBytes('\n')
+			if err != nil {
+				close(c)
+				return
+			}
+			c <- strings.TrimRight(string(line), "\n")
+		}
+	}
+	go tail(stderrChan, stderr)
+	go tail(stdoutChan, stdout)
+	err = cmd.Start()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	go func() {
+		err := cmd.Wait()
+		if err != nil && err.Error() != "signal: killed" {
+			Logger.Fatal("error: ", err)
+		}
+	}()
+	cancel := func() {
+		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGINT)
+	}
+	return stdoutChan, stderrChan, cancel, err
 }
 
 func runMinify(command ...string) error {
@@ -111,34 +155,32 @@ func ensureSetupMinify(app, kind string) string {
 
 func testWeb(t *testing.T, app, kind string) {
 	container := ensureSetupMinify(app, kind)
-	id, err := runStdoutMinify("docker", "create", "-t", "--rm", "--network", "host", container)
+	fmt.Println("start trace container")
+	stdoutChan, stderrChan, cancel, err := runStdoutStderrChanMinify("./docker-trace", "files")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	errChan := make(chan error)
-	go func() {
-		stdout, err := runStdoutMinify("./docker-trace", "files", id, "--start")
-		if err != nil {
-			errChan <- err
-			return
-		}
-		fmt.Println("start minification")
-		err = runStdinMinify(stdout, "./docker-trace", "minify", container, container+"-min")
-		if err != nil {
-			errChan <- err
-			return
-		}
-		errChan <- nil
-	}()
+	fmt.Println("wait for trace container ready")
+	line := <-stderrChan
+	if line != "ready" {
+		t.Error(line)
+		return
+	}
+	fmt.Println("trace container ready, start test container")
+	id, err := runStdoutMinify("docker", "run", "-d", "-t", "--rm", "--network", "host", container)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		IdleConnTimeout: 1*time.Second,
-		TLSHandshakeTimeout: 1*time.Second,
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		IdleConnTimeout:     1 * time.Second,
+		TLSHandshakeTimeout: 1 * time.Second,
 	}
 	client := &http.Client{
 		Transport: tr,
-		Timeout: 1*time.Second,
+		Timeout:   1 * time.Second,
 	}
 	//
 	start := time.Now()
@@ -157,18 +199,31 @@ func testWeb(t *testing.T, app, kind string) {
 		fmt.Println(err)
 		time.Sleep(1 * time.Second)
 	}
+	fmt.Println("test passed, kill test container")
 	//
 	err = runMinify("docker", "kill", id)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	err = <-errChan
-	if err != nil {
-		t.Error(err)
-		return
+	//
+	fmt.Println("cancel trace container and drain output")
+	cancel()
+	var files []string
+	for line := range stdoutChan {
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			fmt.Println("skipping bad line:", line)
+			continue
+		}
+		fileID := parts[0]
+		file := parts[1]
+		if id == fileID {
+			files = append(files, file)
+		}
 	}
 	//
+	fmt.Println("check that test container is not reachable")
 	out, err := client.Get("https://localhost:8080/hello/xyz")
 	if err == nil {
 		_ = out.Body.Close()
@@ -176,6 +231,14 @@ func testWeb(t *testing.T, app, kind string) {
 		return
 	}
 	//
+	fmt.Println("start minification")
+	err = runStdinMinify(strings.Join(files, "\n"), "./docker-trace", "minify", container, container+"-min")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	//
+	fmt.Println("start minified container")
 	id, err = runStdoutMinify("docker", "run", "-d", "--network", "host", "--rm", container+"-min")
 	if err != nil {
 		t.Error(err)
@@ -198,20 +261,21 @@ func testWeb(t *testing.T, app, kind string) {
 		fmt.Println(err)
 		time.Sleep(1 * time.Second)
 	}
+	fmt.Println("compare image sizes")
 	//
 	stdout, err := runStdoutMinify("docker", "inspect", container, "-f", "{{.Size}}")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	size := lib.Atoi(stdout)
+	size := Atoi(stdout)
 	//
 	stdout, err = runStdoutMinify("docker", "inspect", container+"-min", "-f", "{{.Size}}")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	sizeMin := lib.Atoi(stdout)
+	sizeMin := Atoi(stdout)
 	if !(sizeMin < size) {
 		t.Error("not smaller")
 		return

@@ -1,23 +1,66 @@
 package lib
 
 import (
-	// "time"
+	"bufio"
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
 func md5SumFiles(bytes []byte) string {
 	hash := md5.Sum(bytes)
 	return hex.EncodeToString(hash[:])
+}
+
+func runStdoutStderrChanFiles(command ...string) (<-chan string, <-chan string, func(), error) {
+	cmd := exec.Command(command[0], command[1:]...)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	stderrChan := make(chan string)
+	stdoutChan := make(chan string, 1024*1024)
+	tail := func(c chan<- string, r io.ReadCloser) {
+		buf := bufio.NewReader(r)
+		for {
+			line, err := buf.ReadBytes('\n')
+			if err != nil {
+				close(c)
+				return
+			}
+			c <- strings.TrimRight(string(line), "\n")
+		}
+	}
+	go tail(stderrChan, stderr)
+	go tail(stdoutChan, stdout)
+	err = cmd.Start()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	go func() {
+		err := cmd.Wait()
+		if err != nil && err.Error() != "signal: killed" {
+			Logger.Fatal("error: ", err)
+		}
+	}()
+	cancel := func() {
+		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGINT)
+	}
+	return stdoutChan, stderrChan, cancel, err
 }
 
 func runStdoutFiles(command ...string) (string, error) {
@@ -109,21 +152,48 @@ func ensureSetupFiles() {
 	ensureDockerTraceFiles()
 }
 
+func traceCmd(dir string, command string) ([]string, error) {
+	if dir == "" {
+		dir = "/tmp"
+	}
+	stdoutChan, stderrChan, cancel, err := runStdoutStderrChanFiles("./docker-trace", "files")
+	if err != nil {
+		return nil, err
+	}
+	line := <-stderrChan
+	if line != "ready" {
+		return nil, fmt.Errorf(line)
+	}
+	id, err := runStdoutFiles("docker", "run", "-d", "-t", "-v", dir+":/code", "--rm", containerFiles, "bash", "-c", command)
+	if err != nil {
+		return nil, err
+	}
+	err = runFiles("docker", "wait", id)
+	if err != nil {
+		return nil, err
+	}
+	cancel()
+	var files []string
+	for line := range stdoutChan {
+		parts := strings.SplitN(line, " ", 2)
+		fileID := parts[0]
+		file := parts[1]
+		if id == fileID {
+			files = append(files, file)
+		}
+	}
+	return files, nil
+}
+
 func TestTraceCat(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cat /etc/hosts")
+	files, err := traceCmd("", "cat /etc/hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -131,19 +201,13 @@ func TestTraceCat(t *testing.T) {
 
 func TestTraceCdCat(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && cat hosts")
+	files, err := traceCmd("", "cd /etc && cat hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -151,19 +215,13 @@ func TestTraceCdCat(t *testing.T) {
 
 func TestTraceCdBashCat(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && bash -c \"cat hosts\"")
+	files, err := traceCmd("", "cd /etc && bash -c \"cat hosts\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -171,19 +229,13 @@ func TestTraceCdBashCat(t *testing.T) {
 
 func TestTracePythonOpen(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "open('/etc/hosts')")
+	files, err := traceCmd("", "python -c \"open('/etc/hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -191,19 +243,13 @@ func TestTracePythonOpen(t *testing.T) {
 
 func TestTraceBashCdPythonOpen(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /etc && python -c \"open('hosts')\"")
+	files, err := traceCmd("", "cd /etc && python -c \"open('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -211,19 +257,13 @@ func TestTraceBashCdPythonOpen(t *testing.T) {
 
 func TestTracePythonCdOpen(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "import os; os.chdir('/etc'); open('hosts')")
+	files, err := traceCmd("", "python -c \"import os; os.chdir('/etc'); open('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -231,19 +271,13 @@ func TestTracePythonCdOpen(t *testing.T) {
 
 func TestTracePythonCdStat(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "python", "-c", "import os; os.chdir('/etc'); os.stat('hosts')")
+	files, err := traceCmd("", "python -c \"import os; os.chdir('/etc'); os.stat('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -279,19 +313,13 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
+	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -331,19 +359,13 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
+	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -383,19 +405,13 @@ func main() {
 		t.Error(err)
 		return
 	}
-	id, err := runStdoutFiles("docker", "create", "-t", "-v", dir+":/code", "--rm", containerFiles, "go", "run", "/code/main.go")
+	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if !Contains(files, "/etc/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("didnt find /etc/hosts")
 		return
 	}
@@ -403,24 +419,18 @@ func main() {
 
 func TestTraceCdFailCat(t *testing.T) {
 	ensureSetupFiles()
-	id, err := runStdoutFiles("docker", "create", "-t", "--rm", containerFiles, "bash", "-c", "cd /fake; cat hosts")
+	files, err := traceCmd("", "cd /fake; cat hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
-	stdout, err := runStdoutFiles("./docker-trace", "files", id, "--start")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	files := strings.Split(stdout, "\n")
 	if Contains(files, "/fake/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("found /fake/hosts")
 		return
 	}
 	if Contains(files, "/hosts") {
-		fmt.Println(stdout)
+		fmt.Println(strings.Join(files, "\n"))
 		t.Errorf("found /hosts")
 		return
 	}
