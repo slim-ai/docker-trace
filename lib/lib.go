@@ -484,6 +484,10 @@ func Dockerfile(ctx context.Context, name string) ([]string, error) {
 				ports := regex.FindAllString("EXPOSE map[8080/4545]", -1)
 				line = "EXPOSE " + strings.Join(ports, " ")
 			}
+			if strings.HasPrefix(line, "ENV ") {
+				parts := strings.SplitN(line, "=", 2)
+				line = parts[0] + `="` + parts[1] + `"`
+			}
 			result = append(result, line)
 		}
 	}
