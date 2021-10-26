@@ -62,7 +62,6 @@ func SignalHandler(cancel func()) {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		Logger.Println("signal handler")
 		cancel()
 	}()
 }
@@ -494,6 +493,7 @@ func Max(i, j int) int {
 
 type File struct {
 	Syscall string
+	Cgroup  string
 	Pid     string
 	Ppid    string
 	Comm    string
@@ -504,23 +504,50 @@ type File struct {
 func FilesParseLine(line string) File {
 	parts := strings.Split(line, "\t")
 	file := File{}
-	if len(parts) != 6 {
+	if len(parts) != 7 {
 		Logger.Printf("skipping bpftrace line: %s\n", line)
 		return file
 	}
 	file.Syscall = parts[0]
-	file.Pid = parts[1]
-	file.Ppid = parts[2]
-	file.Comm = parts[3]
-	file.Errno = parts[4]
-	file.File = parts[5]
+	file.Cgroup = parts[1]
+	file.Pid = parts[2]
+	file.Ppid = parts[3]
+	file.Comm = parts[4]
+	file.Errno = parts[5]
+	file.File = parts[6]
+	// sometimes file paths include the fs driver paths
+	//
+	// /mnt/docker-data/overlay2/1b7b19463b59ac563677fda461918ae2faed45d86000fc68cf0eb8052687c121/merged/etc/hosts
+	// /var/lib/docker/zfs/graph/825b1c966c9421a50e0200fe3a9d7fe0beddebdd745ea2b976d4c7cf8d1b2e8e/etc/hosts
+	//
+	if strings.Contains(file.File, "/overlay2/") {
+		file.File = last(strings.Split(file.File, "/overlay2/"))
+		file.File =  "/" + strings.Join(strings.Split(file.File, "/")[2:], "/")
+	} else if strings.Contains(file.File, "/zfs/graph/") {
+		file.File = last(strings.Split(file.File, "/zfs/graph/"))
+		file.File =  "/" + strings.Join(strings.Split(file.File, "/")[1:], "/")
+	}
+	//
 	return file
 }
 
-func FilesHandleLine(cwds map[string]string, line string) {
+func last(xs []string) string {
+	return xs[len(xs)-1]
+}
+
+func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 	file := FilesParseLine(line)
-	if file.File != "" && file.Errno == "0" {
-		// track cwd by pid
+	if file.Syscall == "cgroup_mkdir" {
+		// track cgroups of docker containers as they start
+		//
+		// /sys/fs/cgroup/system.slice/docker-425428dfb2644cfd111d406b5f8f68a7596731a451f0169caa7393f3a39db9ca.scope
+		//
+		part := last(strings.Split(file.File, "/"))
+		if strings.HasPrefix(part, "docker-") {
+			cgroups[file.Cgroup] = part[7:64+7]
+		}
+	} else if cgroups[file.Cgroup] != "" && file.File != "" && file.Errno == "0" {
+		// pids start at cwd of parent
 		_, ok := cwds[file.Pid]
 		if !ok {
 			_, ok := cwds[file.Ppid]
@@ -530,6 +557,7 @@ func FilesHandleLine(cwds map[string]string, line string) {
 				cwds[file.Pid] = "/"
 			}
 		}
+		// update cwd when chdir succeeds
 		if file.Syscall == "chdir" {
 			if file.File[:1] == "/" {
 				cwds[file.Pid] = file.File
@@ -547,6 +575,6 @@ func FilesHandleLine(cwds map[string]string, line string) {
 		}
 		//
 		// _, _ = fmt.Fprintln(os.Stderr, file.Pid, file.Ppid, fmt.Sprintf("%-40s", file.File), fmt.Sprintf("%-10s", file.Comm), file.Errno, file.Syscall)
-		fmt.Println(file.File)
+		fmt.Println(cgroups[file.Cgroup], file.File)
 	}
 }

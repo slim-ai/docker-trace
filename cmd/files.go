@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/alexflint/go-arg"
 	"github.com/docker/docker/api/types"
@@ -30,8 +29,6 @@ func init() {
 }
 
 type filesArgs struct {
-	ContainerID string `arg:"positional,required"`
-	Start       bool   `arg:"-s,--start" help:"call docker-start on ContainerID"`
 }
 
 func (filesArgs) Description() string {
@@ -56,22 +53,16 @@ const filesBpftrace = `#!/usr/bin/env bpftrace
 
 #include <linux/sched.h>
 
-// ENTER
+tracepoint:cgroup:cgroup_mkdir { printf("cgroup_mkdir\t%d\t\t\t\t\t%s\n", args->id, str(args->path)); }
 
-tracepoint:syscalls:sys_enter_exec*
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ printf("exec\t%d\t%d\t%s\t0\t%s\n", pid, curtask->real_parent->pid, comm, str(args->filename)); }
+tracepoint:syscalls:sys_enter_exec* { printf("exec\t%d\t%d\t%d\t%s\t0\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, str(args->filename)); }
 
 tracepoint:syscalls:sys_enter_creat,
 tracepoint:syscalls:sys_enter_statfs,
-tracepoint:syscalls:sys_enter_readlinkat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ @filename[tid] = args->pathname; }
+tracepoint:syscalls:sys_enter_readlinkat { @filename[tid] = args->pathname; }
 
 tracepoint:syscalls:sys_enter_readlink,
-tracepoint:syscalls:sys_enter_truncate
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ @filename[tid] = args->path; }
+tracepoint:syscalls:sys_enter_truncate { @filename[tid] = args->path; }
 
 tracepoint:syscalls:sys_enter_utimensat,
 tracepoint:syscalls:sys_enter_chdir,
@@ -85,88 +76,28 @@ tracepoint:syscalls:sys_enter_mknodat,
 tracepoint:syscalls:sys_enter_faccessat,
 tracepoint:syscalls:sys_enter_utimes,
 tracepoint:syscalls:sys_enter_newstat,
-tracepoint:syscalls:sys_enter_newlstat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ @filename[tid] = args->filename; }
+tracepoint:syscalls:sys_enter_newlstat { @filename[tid] = args->filename; }
 
-// EXIT
+tracepoint:syscalls:sys_exit_utimensat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimensat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_faccessat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("faccessat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_chdir      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("chdir\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_access     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("access\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_futimesat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("futimesat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_open       { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("open\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_openat     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("openat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_readlink   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlink\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_truncate   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("truncate\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_readlinkat { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlinkat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_statfs     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statfs\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_creat      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("creat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_statx      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statx\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_newstat    { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newstat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_mknod      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknod\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_mknodat    { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknodat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_utimes     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimes\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_newlstat   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newlstat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
 
-tracepoint:syscalls:sys_exit_utimensat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimensat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_faccessat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("faccessat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_chdir
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("chdir\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_access
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("access\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_futimesat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("futimesat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_open
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("open\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_openat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("openat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_readlink
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlink\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_truncate
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("truncate\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_readlinkat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlinkat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_statfs
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statfs\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_creat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("creat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_statx
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statx\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_newstat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newstat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_mknod
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknod\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_mknodat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknodat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_utimes
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimes\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-tracepoint:syscalls:sys_exit_newlstat
-/cgroup == cgroupid("/sys/fs/cgroup/system.slice/docker-CONTAINERID.scope")/
-{ $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newlstat\t%d\t%d\t%s\t%d\t%s\n", pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-
-// END
-
-END
-{ clear(@filename); }
+END { clear(@filename); }
 
 `
 
@@ -190,10 +121,6 @@ func files() {
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/cgroups#Switching_to_cgroups_v2")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/Kernel_parameters#GRUB")
 		lib.Logger.Fatal("")
-	}
-	//
-	if len(args.ContainerID) != 64 {
-		lib.Logger.Fatal("error: you must use the full 64 charactor ContainerID, not:", args.ContainerID)
 	}
 	//
 	cli, err := client.NewClientWithOpts(client.FromEnv)
@@ -301,7 +228,7 @@ func files() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	err = ioutil.WriteFile(tempDir+"/files.bt", []byte(strings.ReplaceAll(filesBpftrace, "CONTAINERID", args.ContainerID)), 0666)
+	err = ioutil.WriteFile(tempDir+"/files.bt", []byte(filesBpftrace), 0666)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -313,45 +240,6 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	kernel := strings.Trim(stdout.String(), "\n")
-	//
-	// to see all files, bpftrace needs to start before the container, but in that case the cgroup directory doesn't exist yet and must be created
-	cgroupPath := fmt.Sprintf("/sys/fs/cgroup/system.slice/docker-%s.scope", args.ContainerID)
-	if !lib.Exists(cgroupPath) {
-		run := func(cmd ...string) {
-			out, err := cli.ContainerCreate(
-				ctx,
-				&container.Config{
-					Cmd:   cmd,
-					Image: "docker-trace:bpftrace",
-				},
-				&container.HostConfig{
-					AutoRemove: true,
-					Binds:      []string{"/sys/fs/cgroup:/sys/fs/cgroup"},
-				},
-				&network.NetworkingConfig{},
-				&specs.Platform{Architecture: "amd64", OS: "linux"},
-				"docker-trace-mkdir-"+uid,
-			)
-			if err != nil {
-				lib.Logger.Fatal("error: ", err)
-			}
-			err = cli.ContainerStart(ctx, out.ID, types.ContainerStartOptions{})
-			if err != nil {
-				lib.Logger.Fatal("error: ", err)
-			}
-			waitChan, errChan := cli.ContainerWait(ctx, out.ID, container.WaitConditionNextExit)
-			select {
-			case err = <-errChan:
-				panic(err)
-			case wait := <-waitChan:
-				if wait.StatusCode != 0 {
-					os.Exit(1)
-				}
-			}
-		}
-		run("mkdir", "-p", cgroupPath)
-		defer run("rm", "-rf", cgroupPath)
-	}
 	//
 	out, err := cli.ContainerCreate(
 		ctx,
@@ -388,29 +276,15 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	//
 	cleanup := func() {
-		_ = cli.ContainerKill(ctx, out.ID, "kill")
-		if args.Start {
-			_ = cli.ContainerKill(ctx, args.ContainerID, "kill")
-		}
+		_ = cli.ContainerKill(context.Background(), out.ID, "KILL")
 		_ = os.RemoveAll(tempDir)
+		cancel()
 	}
 	lib.SignalHandler(cleanup)
-	//
-	errChanTracedContainer := make(chan error)
-	go func() {
-		waitChan, errChan := cli.ContainerWait(ctx, args.ContainerID, container.WaitConditionNextExit)
-		select {
-		case err := <-errChan:
-			errChanTracedContainer <- err
-		case wait := <-waitChan:
-			if wait.StatusCode != 0 {
-				errChanTracedContainer <- fmt.Errorf("traced container exited: %d", wait.StatusCode)
-			} else {
-				errChanTracedContainer <- nil
-			}
-		}
-	}()
 	//
 	logs, err := cli.ContainerLogs(ctx, out.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
@@ -432,50 +306,28 @@ func files() {
 	}
 	fmt.Fprintln(os.Stderr, "ready")
 	//
-	if args.Start {
-		err = cli.ContainerStart(ctx, args.ContainerID, types.ContainerStartOptions{})
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-	}
-	//
-	errChanLogs := make(chan error)
-	go func() {
-		cwds := make(map[string]string)
-		for {
-			line, err := buf.ReadBytes('\n')
-			if err != nil {
-				errChanLogs <- err
-				return
-			}
-			str := string(line[8 : len(line)-1]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
-			switch line[0] {
-			case 1:
-				lib.FilesHandleLine(cwds, str)
-			case 2:
-				_, _ = fmt.Fprint(os.Stderr, str)
-			}
-			errChanLogs <- nil
-		}
-	}()
-	//
+	cwds := make(map[string]string)
+	cgroups := make(map[string]string)
 	for {
 		select {
-		case err := <-errChanLogs:
-			if err != nil {
-				cleanup()
-				if err != io.EOF {
-					lib.Logger.Fatal("error:", err)
-				}
+		case <-ctx.Done():
+			return
+		default:
+		}
+		line, err := buf.ReadBytes('\n')
+		if err != nil {
+			cleanup()
+			if err == io.EOF || err == context.Canceled {
 				return
 			}
-		case <-time.After(1 * time.Second): // once trace container has exited, wait 1 second for logs before exiting
-			select {
-			case <-errChanTracedContainer:
-				cleanup()
-				return
-			default:
-			}
+			lib.Logger.Fatal("error:", err)
+		}
+		str := string(line[8 : len(line)-1]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
+		switch line[0] {
+		case 1:
+			lib.FilesHandleLine(cwds, cgroups, str)
+		case 2:
+			_, _ = fmt.Fprint(os.Stderr, str)
 		}
 	}
 }
