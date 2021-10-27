@@ -586,6 +586,6 @@ func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 		}
 		//
 		// _, _ = fmt.Fprintln(os.Stderr, file.Pid, file.Ppid, fmt.Sprintf("%-40s", file.File), fmt.Sprintf("%-10s", file.Comm), file.Errno, file.Syscall)
-		fmt.Println(cgroups[file.Cgroup], file.Syscall, file.File)
+		fmt.Println(cgroups[file.Cgroup], file.File)
 	}
 }
