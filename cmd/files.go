@@ -29,6 +29,7 @@ func init() {
 }
 
 type filesArgs struct {
+	BpfRingBufferPages int `arg:"-p,--rb-pages" default:"65536" help:"double this value if you encounter 'Lost events' messages on stderr"`
 }
 
 func (filesArgs) Description() string {
@@ -105,14 +106,16 @@ END { clear(@filename); }
 
 `
 
-var filesConfig = &container.Config{
-	Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
-	Image: "docker-trace:bpftrace",
-	Env: []string{
-		"BPFTRACE_STRLEN=200",
-		"BPFTRACE_PERF_RB_PAGES=256",
-		"BPFTRACE_LOG_SIZE=10000000",
-	},
+func filesConfig(pages int) *container.Config {
+	return &container.Config{
+		Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
+		Image: "docker-trace:bpftrace",
+		Env: []string{
+			"BPFTRACE_STRLEN=200",
+			"BPFTRACE_MAP_KEYS_MAX=8192",
+			fmt.Sprintf("BPFTRACE_PERF_RB_PAGES=%d", pages),
+		},
+	}
 }
 
 func filesKernel() string {
@@ -157,7 +160,6 @@ func filesUpdateFilters() string {
 	filters = strings.ReplaceAll(filters, "FILTER_TID", filesBpftraceFilterTID)
 	return filters
 }
-
 
 func files() {
 	var args filesArgs
@@ -293,7 +295,7 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	out, err := cli.ContainerCreate(ctx, filesConfig, filesHostConfig(tempDir), filesNetworkConfig, filesPlatform, "docker-trace-"+uid)
+	out, err := cli.ContainerCreate(ctx, filesConfig(args.BpfRingBufferPages), filesHostConfig(tempDir), filesNetworkConfig, filesPlatform, "docker-trace-"+uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
