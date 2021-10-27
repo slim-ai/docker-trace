@@ -60,6 +60,7 @@ type DockerfileConfig struct {
 
 func SignalHandler(cancel func()) {
 	c := make(chan os.Signal, 1)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
@@ -585,6 +586,6 @@ func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 		}
 		//
 		// _, _ = fmt.Fprintln(os.Stderr, file.Pid, file.Ppid, fmt.Sprintf("%-40s", file.File), fmt.Sprintf("%-10s", file.Comm), file.Errno, file.Syscall)
-		fmt.Println(cgroups[file.Cgroup], file.File)
+		fmt.Println(cgroups[file.Cgroup], file.Syscall, file.File)
 	}
 }

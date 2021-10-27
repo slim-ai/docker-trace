@@ -46,8 +46,12 @@ RUN echo 'Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch' >  /etc/
 
 # install bpftrace
 RUN pacman -Syu --noconfirm bpftrace
-
 `
+
+const filesBpftraceFilterFilename = `/strncmp("/proc/", str(args->filename), 6) != 0 && strncmp("/sys/", str(args->filename), 5) != 0 && strncmp("/dev/", str(args->filename), 5) != 0/`
+const filesBpftraceFilterPathname = `/strncmp("/proc/", str(args->pathname), 6) != 0 && strncmp("/sys/", str(args->pathname), 5) != 0 && strncmp("/dev/", str(args->pathname), 5) != 0/`
+const filesBpftraceFilterPath = `    /strncmp("/proc/", str(args->path),     6) != 0 && strncmp("/sys/", str(args->path),     5) != 0 && strncmp("/dev/", str(args->path),     5) != 0/`
+const filesBpftraceFilterTID = `     /strncmp("/proc/", str(@filename[tid]), 6) != 0 && strncmp("/sys/", str(@filename[tid]), 5) != 0 && strncmp("/dev/", str(@filename[tid]), 5) != 0/`
 
 const filesBpftrace = `#!/usr/bin/env bpftrace
 
@@ -55,14 +59,14 @@ const filesBpftrace = `#!/usr/bin/env bpftrace
 
 tracepoint:cgroup:cgroup_mkdir { printf("cgroup_mkdir\t%d\t\t\t\t\t%s\n", args->id, str(args->path)); }
 
-tracepoint:syscalls:sys_enter_exec* { printf("exec\t%d\t%d\t%d\t%s\t0\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, str(args->filename)); }
+tracepoint:syscalls:sys_enter_exec* FILTER_FILENAME { printf("exec\t%d\t%d\t%d\t%s\t0\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, str(args->filename)); }
 
 tracepoint:syscalls:sys_enter_creat,
 tracepoint:syscalls:sys_enter_statfs,
-tracepoint:syscalls:sys_enter_readlinkat { @filename[tid] = args->pathname; }
+tracepoint:syscalls:sys_enter_readlinkat FILTER_PATHNAME { @filename[tid] = args->pathname; }
 
 tracepoint:syscalls:sys_enter_readlink,
-tracepoint:syscalls:sys_enter_truncate { @filename[tid] = args->path; }
+tracepoint:syscalls:sys_enter_truncate FILTER_PATH { @filename[tid] = args->path; }
 
 tracepoint:syscalls:sys_enter_utimensat,
 tracepoint:syscalls:sys_enter_chdir,
@@ -76,30 +80,84 @@ tracepoint:syscalls:sys_enter_mknodat,
 tracepoint:syscalls:sys_enter_faccessat,
 tracepoint:syscalls:sys_enter_utimes,
 tracepoint:syscalls:sys_enter_newstat,
-tracepoint:syscalls:sys_enter_newlstat { @filename[tid] = args->filename; }
+tracepoint:syscalls:sys_enter_newlstat FILTER_FILENAME { @filename[tid] = args->filename; }
 
-tracepoint:syscalls:sys_exit_utimensat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimensat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_faccessat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("faccessat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_chdir      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("chdir\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_access     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("access\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_futimesat  { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("futimesat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_open       { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("open\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_openat     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("openat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_readlink   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlink\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_truncate   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("truncate\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_readlinkat { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlinkat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_statfs     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statfs\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_creat      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("creat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_statx      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statx\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_newstat    { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newstat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_mknod      { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknod\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_mknodat    { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknodat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_utimes     { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimes\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
-tracepoint:syscalls:sys_exit_newlstat   { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newlstat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_utimensat  FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimensat\t%d\t%d\t%d\t%s\t%d\t%s\n",  cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_faccessat  FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("faccessat\t%d\t%d\t%d\t%s\t%d\t%s\n",  cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_chdir      FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("chdir\t%d\t%d\t%d\t%s\t%d\t%s\n",      cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_access     FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("access\t%d\t%d\t%d\t%s\t%d\t%s\n",     cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_futimesat  FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("futimesat\t%d\t%d\t%d\t%s\t%d\t%s\n",  cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_open       FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("open\t%d\t%d\t%d\t%s\t%d\t%s\n",       cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_openat     FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("openat\t%d\t%d\t%d\t%s\t%d\t%s\n",     cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_readlink   FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlink\t%d\t%d\t%d\t%s\t%d\t%s\n",   cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_truncate   FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("truncate\t%d\t%d\t%d\t%s\t%d\t%s\n",   cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_readlinkat FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("readlinkat\t%d\t%d\t%d\t%s\t%d\t%s\n", cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_statfs     FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statfs\t%d\t%d\t%d\t%s\t%d\t%s\n",     cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_creat      FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("creat\t%d\t%d\t%d\t%s\t%d\t%s\n",      cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_statx      FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("statx\t%d\t%d\t%d\t%s\t%d\t%s\n",      cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_newstat    FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newstat\t%d\t%d\t%d\t%s\t%d\t%s\n",    cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_mknod      FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknod\t%d\t%d\t%d\t%s\t%d\t%s\n",      cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_mknodat    FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("mknodat\t%d\t%d\t%d\t%s\t%d\t%s\n",    cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_utimes     FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("utimes\t%d\t%d\t%d\t%s\t%d\t%s\n",     cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
+tracepoint:syscalls:sys_exit_newlstat   FILTER_TID { $ret = args->ret; $errno = $ret >= 0 ? 0 : - $ret; printf("newlstat\t%d\t%d\t%d\t%s\t%d\t%s\n",   cgroup, pid, curtask->real_parent->pid, comm, $errno, str(@filename[tid])); delete(@filename[tid]); }
 
 END { clear(@filename); }
 
 `
+
+var filesConfig = &container.Config{
+	Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
+	Image: "docker-trace:bpftrace",
+	Env: []string{
+		"BPFTRACE_STRLEN=200",
+		"BPFTRACE_PERF_RB_PAGES=256",
+		"BPFTRACE_LOG_SIZE=10000000",
+	},
+}
+
+func filesKernel() string {
+	cmd := exec.Command("uname", "-r")
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	err := cmd.Run()
+	if err != nil {
+		lib.Logger.Fatal("error: ", err)
+	}
+	kernel := strings.Trim(stdout.String(), "\n")
+	return kernel
+}
+
+func filesHostConfig(tempDir string) *container.HostConfig {
+	return &container.HostConfig{
+		AutoRemove: true,
+		Binds: []string{
+			tempDir + ":/bpftrace",
+			"/sys/fs/cgroup:/sys/fs/cgroup:ro",
+			fmt.Sprintf("/usr/lib/modules/%s:/usr/lib/modules/%s:ro", filesKernel(), filesKernel()),
+			"/sys/kernel/debug:/sys/kernel/debug:ro",
+		},
+		Privileged:  true,
+		CapAdd:      []string{"SYS_ADMIN"},
+		SecurityOpt: []string{"no-new-privileges"},
+	}
+}
+
+var filesNetworkConfig = &network.NetworkingConfig{}
+
+var filesPlatform = &specs.Platform{
+	Architecture: "amd64",
+	OS:           "linux",
+}
+
+func filesUpdateFilters() string {
+	filters := filesBpftrace
+	filters = strings.ReplaceAll(filters, "FILTER_PATHNAME", filesBpftraceFilterPathname)
+	filters = strings.ReplaceAll(filters, "FILTER_FILENAME", filesBpftraceFilterFilename)
+	filters = strings.ReplaceAll(filters, "FILTER_PATH", filesBpftraceFilterPath)
+	filters = strings.ReplaceAll(filters, "FILTER_TID", filesBpftraceFilterTID)
+	return filters
+}
+
 
 func files() {
 	var args filesArgs
@@ -228,42 +286,14 @@ func files() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	err = ioutil.WriteFile(tempDir+"/files.bt", []byte(filesBpftrace), 0666)
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	cmd := exec.Command("uname", "-r")
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	err = cmd.Run()
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	kernel := strings.Trim(stdout.String(), "\n")
 	//
-	out, err := cli.ContainerCreate(
-		ctx,
-		&container.Config{
-			Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
-			Image: "docker-trace:bpftrace",
-			Env:   []string{"BPFTRACE_STRLEN=200"},
-		},
-		&container.HostConfig{
-			AutoRemove: true,
-			Binds: []string{
-				tempDir + ":/bpftrace",
-				"/sys/fs/cgroup:/sys/fs/cgroup:ro",
-				fmt.Sprintf("/usr/lib/modules/%s:/usr/lib/modules/%s:ro", kernel, kernel),
-				"/sys/kernel/debug:/sys/kernel/debug:ro",
-			},
-			Privileged:  true,
-			CapAdd:      []string{"SYS_ADMIN"},
-			SecurityOpt: []string{"no-new-privileges"},
-		},
-		&network.NetworkingConfig{},
-		&specs.Platform{Architecture: "amd64", OS: "linux"},
-		"docker-trace-"+uid,
-	)
+	// filter out events from cgroups created before this process started and from filepaths in /proc/, /sys/, /dev/
+	err = ioutil.WriteFile(tempDir+"/files.bt", []byte(filesUpdateFilters()), 0666)
+	if err != nil {
+		lib.Logger.Fatal("error: ", err)
+	}
+	//
+	out, err := cli.ContainerCreate(ctx, filesConfig, filesHostConfig(tempDir), filesNetworkConfig, filesPlatform, "docker-trace-"+uid)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -275,6 +305,7 @@ func files() {
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
+
 	//
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
