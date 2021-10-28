@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/alexflint/go-arg"
@@ -60,7 +61,7 @@ func minify() {
 	}
 	for _, path := range strings.Split(string(bytes), "\n") {
 		path = strings.Trim(path, " ")
-		path = strings.ReplaceAll(path, "//", "/")
+		path = filepath.Clean(path)
 		if path != "" {
 			includePaths[path] = nil
 		}
