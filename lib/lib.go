@@ -533,10 +533,16 @@ func FilesParseLine(line string) File {
 	//
 	if strings.Contains(file.File, "/overlay2/") {
 		file.File = last(strings.Split(file.File, "/overlay2/"))
-		file.File = "/" + strings.Join(strings.Split(file.File, "/")[2:], "/")
+		parts := strings.Split(file.File, "/")
+		if len(parts) > 2 {
+			file.File = "/" + strings.Join(parts[2:], "/")
+		}
 	} else if strings.Contains(file.File, "/zfs/graph/") {
 		file.File = last(strings.Split(file.File, "/zfs/graph/"))
-		file.File = "/" + strings.Join(strings.Split(file.File, "/")[1:], "/")
+		parts := strings.Split(file.File, "/")
+		if len(parts) > 1 {
+			file.File = "/" + strings.Join(parts[1:], "/")
+		}
 	}
 	//
 	return file
