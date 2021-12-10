@@ -13,6 +13,8 @@ require (
 	github.com/satori/go.uuid v1.2.0
 )
 
+require github.com/opencontainers/image-spec v1.0.1
+
 require (
 	github.com/Microsoft/go-winio v0.4.17 // indirect
 	github.com/alexflint/go-scalar v1.0.0 // indirect
@@ -21,7 +23,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110 // indirect

@@ -79,6 +79,7 @@ tracepoint:syscalls:sys_enter_statx,
 tracepoint:syscalls:sys_enter_mknod,
 tracepoint:syscalls:sys_enter_mknodat,
 tracepoint:syscalls:sys_enter_faccessat,
+tracepoint:syscalls:sys_enter_utime,
 tracepoint:syscalls:sys_enter_utimes,
 tracepoint:syscalls:sys_enter_newstat,
 tracepoint:syscalls:sys_enter_newlstat FILTER_FILENAME { @filename[tid] = args->filename; }
@@ -165,18 +166,7 @@ func files() {
 	var args filesArgs
 	arg.MustParse(&args)
 	//
-	files, err := ioutil.ReadDir("/sys/fs/cgroup/")
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	fail := true
-	for _, file := range files {
-		if file.Name() == "cgroup.controllers" {
-			fail = false
-			break
-		}
-	}
-	if fail {
+	if exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
 		lib.Logger.Println("fatal: cgroups v2 are required")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/cgroups#Switching_to_cgroups_v2")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/Kernel_parameters#GRUB")
