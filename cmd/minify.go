@@ -49,12 +49,7 @@ func minify() {
 	//
 	lib.Logger.Println("parse include paths")
 	//
-	// most contains break without these files
-	includePaths := map[string]interface{}{
-		"/usr/bin/env": nil,
-		"/bin/bash":    nil,
-		"/bin/sh":      nil,
-	}
+	includePaths := map[string]interface{}{}
 	bytes, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
@@ -62,6 +57,7 @@ func minify() {
 	for _, path := range strings.Split(string(bytes), "\n") {
 		path = strings.Trim(path, " ")
 		path = filepath.Clean(path)
+		path = strings.ReplaceAll(path, "/./", "/")
 		if path != "" {
 			includePaths[path] = nil
 		}
@@ -111,11 +107,15 @@ func minify() {
 	lib.Logger.Println("update include paths for ld-*.so and symlinks at root")
 	//
 	for _, f := range files {
+		f.Path = strings.ReplaceAll(f.Path, "/./", "/")
 		_, ok := includePaths[strings.TrimRight(f.Path, "/")]
 		if !ok {
-			atRoot := len(strings.Split(f.Path, "/")) == 2 && f.LinkTarget != ""                                                       // always include root level symlinks
-			ldSo := strings.Contains(f.Path, "/lib") && strings.HasPrefix(path.Base(f.Path), "ld-") && strings.Contains(f.Path, ".so") // why is bpftrace always missing this one file: /lib/ld-*.so*
-			if !(atRoot || ldSo) {
+			// sometimes files must always be included, here are some hard coded special cases
+			atRoot := len(strings.Split(strings.ReplaceAll(f.Path, "/./", "/"), "/")) == 2 && f.LinkTarget != ""
+			ldSo := strings.Contains(f.Path, "/lib") && strings.HasPrefix(path.Base(f.Path), "ld-") && strings.Contains(f.Path, ".so")
+			name := path.Base(f.Path)
+			isShell := (name == "bash" || name == "sh" || name == "env") && strings.Contains(f.Path, "/bin/")
+			if !(atRoot || ldSo || isShell) {
 				continue
 			}
 			includePaths[f.Path] = nil
@@ -340,7 +340,8 @@ func minifyLayer(layer string, r io.Reader, tw *tar.Writer, layers map[string]in
 		if header == nil {
 			continue
 		}
-		includeFile, ok := includeFiles["/"+header.Name]
+		pth := strings.ReplaceAll("/"+header.Name, "/./", "/")
+		includeFile, ok := includeFiles[pth]
 		if !ok {
 			continue
 		}
