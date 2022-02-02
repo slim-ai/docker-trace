@@ -517,7 +517,7 @@ func syscalls() {
 		scanner := bufio.NewScanner(out.Body)
 		val := make(map[string]string)
 		for scanner.Scan() {
- 			err := json.Unmarshal(scanner.Bytes(), &val)
+			err := json.Unmarshal(scanner.Bytes(), &val)
 			if err == nil {
 				lib.Logger.Println(strings.Trim(val["stream"], "\n"))
 			}

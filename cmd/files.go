@@ -1,11 +1,8 @@
 package dockertrace
 
 import (
-	"archive/tar"
 	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,13 +11,7 @@ import (
 	"strings"
 
 	"github.com/alexflint/go-arg"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
 	"github.com/nathants/docker-trace/lib"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/satori/go.uuid"
 )
 
 func init() {
@@ -35,19 +26,6 @@ type filesArgs struct {
 func (filesArgs) Description() string {
 	return "\nbpftrace filesystem access in a running container\n"
 }
-
-const filesDockerfile = `
-
-FROM archlinux:latest
-
-# faster mirrors
-RUN echo 'Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch' >  /etc/pacman.d/mirrorlist && \
-    echo 'Server = https://mirrors.xtom.com/archlinux/$repo/os/$arch'   >> /etc/pacman.d/mirrorlist && \
-    echo 'Server = https://mirror.lty.me/archlinux/$repo/os/$arch'      >> /etc/pacman.d/mirrorlist
-
-# install bpftrace
-RUN pacman -Syu --noconfirm bpftrace
-`
 
 const filesBpftraceFilterFilename = `/strncmp("/proc/", str(args->filename), 6) != 0 && strncmp("/sys/", str(args->filename), 5) != 0 && strncmp("/dev/", str(args->filename), 5) != 0/`
 const filesBpftraceFilterPathname = `/strncmp("/proc/", str(args->pathname), 6) != 0 && strncmp("/sys/", str(args->pathname), 5) != 0 && strncmp("/dev/", str(args->pathname), 5) != 0/`
@@ -107,52 +85,6 @@ END { clear(@filename); }
 
 `
 
-func filesConfig(pages int) *container.Config {
-	return &container.Config{
-		Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
-		Image: "docker-trace:bpftrace",
-		Env: []string{
-			"BPFTRACE_STRLEN=200",
-			"BPFTRACE_MAP_KEYS_MAX=8192",
-			fmt.Sprintf("BPFTRACE_PERF_RB_PAGES=%d", pages),
-		},
-	}
-}
-
-func filesKernel() string {
-	cmd := exec.Command("uname", "-r")
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	err := cmd.Run()
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	kernel := strings.Trim(stdout.String(), "\n")
-	return kernel
-}
-
-func filesHostConfig(tempDir string) *container.HostConfig {
-	return &container.HostConfig{
-		AutoRemove: true,
-		Binds: []string{
-			tempDir + ":/bpftrace",
-			"/sys/fs/cgroup:/sys/fs/cgroup:ro",
-			fmt.Sprintf("/usr/lib/modules/%s:/usr/lib/modules/%s:ro", filesKernel(), filesKernel()),
-			"/sys/kernel/debug:/sys/kernel/debug:ro",
-		},
-		Privileged:  true,
-		CapAdd:      []string{"SYS_ADMIN"},
-		SecurityOpt: []string{"no-new-privileges"},
-	}
-}
-
-var filesNetworkConfig = &network.NetworkingConfig{}
-
-var filesPlatform = &specs.Platform{
-	Architecture: "amd64",
-	OS:           "linux",
-}
-
 func filesUpdateFilters() string {
 	filters := filesBpftrace
 	filters = strings.ReplaceAll(filters, "FILTER_PATHNAME", filesBpftraceFilterPathname)
@@ -173,106 +105,6 @@ func files() {
 		lib.Logger.Fatal("")
 	}
 	//
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	ctx := context.Background()
-	uid := uuid.NewV4().String()
-	_, _, err = cli.ImageInspectWithRaw(ctx, "docker-trace:bpftrace")
-	if err != nil {
-		if err.Error() != "Error: No such image: docker-trace:bpftrace" {
-			lib.Logger.Fatal("error: ", err)
-		}
-		fmt.Println("building image: docker-trace:bpftrace")
-		//
-		w, err := os.OpenFile("/tmp/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		_, err = w.Write([]byte(filesDockerfile))
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		err = w.Close()
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		//
-		w, err = os.OpenFile("/tmp/context.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		tw := tar.NewWriter(w)
-		//
-		fi, err := os.Stat("/tmp/Dockerfile." + uid)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		header, err := tar.FileInfoHeader(fi, "")
-		header.Name = "/tmp/Dockerfile." + uid
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		err = tw.WriteHeader(header)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		//
-		r, err := os.Open("/tmp/Dockerfile." + uid)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		_, err = io.Copy(tw, r)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		//
-		err = r.Close()
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		err = tw.Close()
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		err = w.Close()
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		//
-		r, err = os.Open("/tmp/context.tar." + uid)
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		out, err := cli.ImageBuild(ctx, r, types.ImageBuildOptions{
-			NoCache:     true,
-			Tags:        []string{"docker-trace:bpftrace"},
-			Dockerfile:  "/tmp/Dockerfile." + uid,
-			NetworkMode: "host",
-			Remove:      true,
-		})
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		defer func() { _ = out.Body.Close() }()
-		//
-		scanner := bufio.NewScanner(out.Body)
-		val := make(map[string]string)
-		for scanner.Scan() {
-			err := json.Unmarshal(scanner.Bytes(), &val)
-			if err == nil {
-				lib.Logger.Println(strings.Trim(val["stream"], "\n"))
-			}
-		}
-		err = scanner.Err()
-		if err != nil {
-			lib.Logger.Fatal("error: ", err)
-		}
-		if val["stream"] != "Successfully tagged docker-trace:bpftrace\n" {
-			lib.Logger.Fatal("error: failed to build docker-trace:bpftrace")
-		}
-	}
 	//
 	tempDir, err := ioutil.TempDir("", "docker-trace")
 	if err != nil {
@@ -285,46 +117,33 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
-	out, err := cli.ContainerCreate(ctx, filesConfig(args.BpfRingBufferPages), filesHostConfig(tempDir), filesNetworkConfig, filesPlatform, "docker-trace-"+uid)
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-	for _, warn := range out.Warnings {
-		lib.Logger.Println(warn)
-	}
-	//
-	err = cli.ContainerStart(ctx, out.ID, types.ContainerStartOptions{})
-	if err != nil {
-		lib.Logger.Fatal("error: ", err)
-	}
-
-	//
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	//
 	cleanup := func() {
-		_ = cli.ContainerKill(context.Background(), out.ID, "KILL")
 		_ = os.RemoveAll(tempDir)
 		cancel()
 	}
 	lib.SignalHandler(cleanup)
 	//
-	logs, err := cli.ContainerLogs(ctx, out.ID, types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-	})
+	cmd := exec.CommandContext(ctx, "sudo", "bpftrace", tempDir+"/files.bt")
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	defer func() { _ = logs.Close() }()
+	go func() {
+		err := cmd.Run()
+		if err != nil {
+			lib.Logger.Fatal("error: ", err)
+		}
+	}()
 	//
-	buf := bufio.NewReader(logs)
+	buf := bufio.NewReader(stdout)
 	line, err := buf.ReadBytes('\n')
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
-	if !(strings.HasPrefix(string(line[8:]), "Attaching ") && strings.HasSuffix(string(line[8:]), " probes...\n")) {
+	if !(strings.HasPrefix(string(line), "Attaching ") && strings.HasSuffix(string(line), " probes...\n")) {
 		lib.Logger.Fatalf("error: unexected startup log: %s", string(line))
 	}
 	fmt.Fprintln(os.Stderr, "ready")
@@ -345,12 +164,6 @@ func files() {
 			}
 			lib.Logger.Fatal("error:", err)
 		}
-		str := string(line[8 : len(line)-1]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
-		switch line[0] {
-		case 1:
-			lib.FilesHandleLine(cwds, cgroups, str)
-		case 2:
-			_, _ = fmt.Fprint(os.Stderr, str)
-		}
+		lib.FilesHandleLine(cwds, cgroups, string(line[:len(line)-1]))
 	}
 }

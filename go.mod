@@ -6,7 +6,7 @@ require (
 	github.com/alexflint/go-arg v1.4.2
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/containerd/containerd v1.5.4 // indirect
-	github.com/docker/docker v20.10.8+incompatible
+	github.com/docker/docker v20.10.12+incompatible
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.14
 	github.com/morikuni/aec v1.0.0 // indirect
