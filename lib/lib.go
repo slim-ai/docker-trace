@@ -562,7 +562,7 @@ func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 		fmt.Println(line)
 		part := last(strings.Split(file.File, "/"))
 		if strings.HasPrefix(part, "docker-") {
-			cgroups[file.Cgroup] = last(strings.Split(part, "/docker-"))
+			cgroups[file.Cgroup] = last(strings.Split(part, "docker-"))
 		}
 	} else if cgroups[file.Cgroup] != "" && file.File != "" && file.Errno == "0" {
 		// pids start at cwd of parent
