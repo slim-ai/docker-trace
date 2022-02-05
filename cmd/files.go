@@ -30,6 +30,7 @@ func init() {
 
 type filesArgs struct {
 	BpfRingBufferPages int `arg:"-p,--rb-pages" default:"65536" help:"double this value if you encounter 'Lost events' messages on stderr"`
+	ExitOnReady bool `arg:"-e, --exit" help:"exit when ready to build docker image if needed"`
 }
 
 func (filesArgs) Description() string {
@@ -166,7 +167,7 @@ func files() {
 	var args filesArgs
 	arg.MustParse(&args)
 	//
-	if exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
+	if !args.ExitOnReady && exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
 		lib.Logger.Println("fatal: cgroups v2 are required")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/cgroups#Switching_to_cgroups_v2")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/Kernel_parameters#GRUB")
@@ -328,6 +329,9 @@ func files() {
 		lib.Logger.Fatalf("error: unexected startup log: %s", string(line))
 	}
 	fmt.Fprintln(os.Stderr, "ready")
+	if args.ExitOnReady {
+		os.Exit(0)
+	}
 	//
 	cwds := make(map[string]string)
 	cgroups := make(map[string]string)
