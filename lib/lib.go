@@ -557,12 +557,11 @@ func FilesHandleLine(cwds, cgroups map[string]string, line string) {
 	if file.Syscall == "cgroup_mkdir" {
 		// track cgroups of docker containers as they start
 		//
-		// /system.slice/docker-29e0f49053bd70bce3687cb1a73cba6a376b8ad864
+		// /sys/fs/cgroup/system.slice/docker-425428dfb2644cfd111d406b5f8f68a7596731a451f0169caa7393f3a39db9ca.scope
 		//
-		fmt.Println(line)
 		part := last(strings.Split(file.File, "/"))
 		if strings.HasPrefix(part, "docker-") {
-			cgroups[file.Cgroup] = last(strings.Split(part, "docker-"))
+			cgroups[file.Cgroup] = part[7 : 64+7]
 		}
 	} else if cgroups[file.Cgroup] != "" && file.File != "" && file.Errno == "0" {
 		// pids start at cwd of parent

@@ -189,7 +189,7 @@ func TestTraceCat(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "cat /etc/hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -203,7 +203,7 @@ func TestTraceCdCat(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "cd /etc && cat hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -217,7 +217,7 @@ func TestTraceCdBashCat(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "cd /etc && bash -c \"cat hosts\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -231,7 +231,7 @@ func TestTracePythonOpen(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "python -c \"open('/etc/hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -245,7 +245,7 @@ func TestTraceBashCdPythonOpen(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "cd /etc && python -c \"open('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -259,7 +259,7 @@ func TestTracePythonCdOpen(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "python -c \"import os; os.chdir('/etc'); open('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -273,7 +273,7 @@ func TestTracePythonCdStat(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "python -c \"import os; os.chdir('/etc'); os.stat('hosts')\"")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -315,7 +315,7 @@ func main() {
 	}
 	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -361,7 +361,7 @@ func main() {
 	}
 	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -407,7 +407,7 @@ func main() {
 	}
 	files, err := traceCmd(dir, "go run /code/main.go")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if !Contains(files, "/etc/hosts") {
@@ -421,7 +421,7 @@ func TestTraceCdFailCat(t *testing.T) {
 	ensureSetupFiles()
 	files, err := traceCmd("", "cd /fake; cat hosts")
 	if err != nil {
-		t.Error(err)
+	    t.Error(err)
 		return
 	}
 	if Contains(files, "/fake/hosts") {
