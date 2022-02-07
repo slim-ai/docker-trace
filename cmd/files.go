@@ -29,8 +29,8 @@ func init() {
 }
 
 type filesArgs struct {
-	BpfRingBufferPages int `arg:"-p,--rb-pages" default:"65536" help:"double this value if you encounter 'Lost events' messages on stderr"`
-	ExitOnReady bool `arg:"-e, --exit" help:"exit when ready to build docker image if needed"`
+	BpfRingBufferPages int  `arg:"-p,--rb-pages" default:"65536" help:"double this value if you encounter 'Lost events' messages on stderr"`
+	BuildContainer     bool `arg:"-b, --build-container" help:"exit on ready to build docker container if needed"`
 }
 
 func (filesArgs) Description() string {
@@ -111,7 +111,7 @@ END { clear(@filename); }
 func filesConfig(pages int) *container.Config {
 	return &container.Config{
 		Cmd:   []string{"bpftrace", "/bpftrace/files.bt"},
-		Image: "docker-trace:bpftrace",
+		Image: "nathants/docker-trace:bpftrace",
 		Env: []string{
 			"BPFTRACE_STRLEN=200",
 			"BPFTRACE_MAP_KEYS_MAX=8192",
@@ -167,7 +167,7 @@ func files() {
 	var args filesArgs
 	arg.MustParse(&args)
 	//
-	if !args.ExitOnReady && exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
+	if !args.BuildContainer && exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
 		lib.Logger.Println("fatal: cgroups v2 are required")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/cgroups#Switching_to_cgroups_v2")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/Kernel_parameters#GRUB")
@@ -180,12 +180,12 @@ func files() {
 	}
 	ctx := context.Background()
 	uid := uuid.NewV4().String()
-	_, _, err = cli.ImageInspectWithRaw(ctx, "docker-trace:bpftrace")
+	_, _, err = cli.ImageInspectWithRaw(ctx, "nathants/docker-trace:bpftrace")
 	if err != nil {
-		if err.Error() != "Error: No such image: docker-trace:bpftrace" {
+		if err.Error() != "Error: No such image: nathants/docker-trace:bpftrace" {
 			lib.Logger.Fatal("error: ", err)
 		}
-		fmt.Println("building image: docker-trace:bpftrace")
+		fmt.Println("building image: nathants/docker-trace:bpftrace")
 		//
 		w, err := os.OpenFile("/tmp/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
@@ -248,7 +248,7 @@ func files() {
 		}
 		out, err := cli.ImageBuild(ctx, r, types.ImageBuildOptions{
 			NoCache:     true,
-			Tags:        []string{"docker-trace:bpftrace"},
+			Tags:        []string{"nathants/docker-trace:bpftrace"},
 			Dockerfile:  "/tmp/Dockerfile." + uid,
 			NetworkMode: "host",
 			Remove:      true,
@@ -270,8 +270,8 @@ func files() {
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
-		if val["stream"] != "Successfully tagged docker-trace:bpftrace\n" {
-			lib.Logger.Fatal("error: failed to build docker-trace:bpftrace")
+		if val["stream"] != "Successfully tagged nathants/docker-trace:bpftrace\n" {
+			lib.Logger.Fatal("error: failed to build nathants/docker-trace:bpftrace")
 		}
 	}
 	//
@@ -329,7 +329,8 @@ func files() {
 		lib.Logger.Fatalf("error: unexected startup log: %s", string(line))
 	}
 	fmt.Fprintln(os.Stderr, "ready")
-	if args.ExitOnReady {
+	if args.BuildContainer {
+		cleanup()
 		os.Exit(0)
 	}
 	//

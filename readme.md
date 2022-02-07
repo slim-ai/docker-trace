@@ -12,6 +12,19 @@ containers have too much stuff in them.
 >> go get github.com/nathants/docker-trace
 ```
 
+## pull or build bpftrace container
+
+```
+>> docker pull nathants/docker-trace:bpftrace@sha256:5c21cedc47a36e0a719c40f0e9fd1b4b171a15c7d85bf4622c8ad6a62f98a820
+>> docker tag  nathants/docker-trace:bpftrace@sha256:5c21cedc47a36e0a719c40f0e9fd1b4b171a15c7d85bf4622c8ad6a62f98a820 nathants/docker-trace:bpftrace
+```
+
+or
+
+```
+>> docker-trace files --build-container
+```
+
 ## usage
 
 ```
