@@ -187,7 +187,7 @@ func files() {
 		}
 		fmt.Println("building image: nathants/docker-trace:bpftrace")
 		//
-		w, err := os.OpenFile("/tmp/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+		w, err := os.OpenFile(lib.DataDir()+"/Dockerfile."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
@@ -200,18 +200,18 @@ func files() {
 			lib.Logger.Fatal("error: ", err)
 		}
 		//
-		w, err = os.OpenFile("/tmp/context.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+		w, err = os.OpenFile(lib.DataDir()+"/context.tar."+uid, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
 		tw := tar.NewWriter(w)
 		//
-		fi, err := os.Stat("/tmp/Dockerfile." + uid)
+		fi, err := os.Stat(lib.DataDir() + "/Dockerfile." + uid)
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
 		header, err := tar.FileInfoHeader(fi, "")
-		header.Name = "/tmp/Dockerfile." + uid
+		header.Name = lib.DataDir() + "/Dockerfile." + uid
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
@@ -220,7 +220,7 @@ func files() {
 			lib.Logger.Fatal("error: ", err)
 		}
 		//
-		r, err := os.Open("/tmp/Dockerfile." + uid)
+		r, err := os.Open(lib.DataDir() + "/Dockerfile." + uid)
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
@@ -242,14 +242,14 @@ func files() {
 			lib.Logger.Fatal("error: ", err)
 		}
 		//
-		r, err = os.Open("/tmp/context.tar." + uid)
+		r, err = os.Open(lib.DataDir() + "/context.tar." + uid)
 		if err != nil {
 			lib.Logger.Fatal("error: ", err)
 		}
 		out, err := cli.ImageBuild(ctx, r, types.ImageBuildOptions{
 			NoCache:     true,
 			Tags:        []string{"nathants/docker-trace:bpftrace"},
-			Dockerfile:  "/tmp/Dockerfile." + uid,
+			Dockerfile:  lib.DataDir() + "/Dockerfile." + uid,
 			NetworkMode: "host",
 			Remove:      true,
 		})
@@ -356,6 +356,7 @@ func files() {
 			lib.FilesHandleLine(cwds, cgroups, str)
 		case 2:
 			_, _ = fmt.Fprint(os.Stderr, str)
+		default:
 		}
 	}
 }

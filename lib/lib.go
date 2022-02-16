@@ -36,6 +36,17 @@ func Atoi(x string) int {
 	return y
 }
 
+func DataDir() string {
+	dir := fmt.Sprintf("%s/.docker-trace", os.Getenv("HOME"))
+	if !Exists(dir) {
+		err := os.Mkdir(dir, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return dir
+}
+
 var Commands = make(map[string]func())
 
 type ArgsStruct interface {
