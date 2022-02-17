@@ -63,7 +63,7 @@ func minify() {
 		}
 	}
 	//
-	lib.Logger.Println("recursively resolve symlinks")
+	lib.Logger.Println("recursively resolve links")
 	//
 	includeFiles := make(map[string]*lib.ScanFile)
 	var last *lib.ScanFile
@@ -74,7 +74,7 @@ func minify() {
 		}
 	}
 	//
-	// recursively resolve all symlinks
+	// recursively resolve all links
 	for p := range includePaths {
 		last := ""
 		for {
@@ -376,7 +376,17 @@ func minifyLayer(layer string, r io.Reader, tw *tar.Writer, layers map[string]in
 			if err != nil {
 				lib.Logger.Fatal("error: ", err)
 			}
+		case tar.TypeLink:
+			err := tw.WriteHeader(header)
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
+			_, err = io.Copy(tw, tr)
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
 		default:
+			panic(fmt.Sprintf("unknown tar type: %v", header.Typeflag))
 		}
 	}
 }

@@ -386,7 +386,7 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 				Path:       "/" + header.Name,
 				Mode:       header.FileInfo().Mode(),
 				ModTime:    header.ModTime,
-				LinkTarget: header.Linkname,
+				LinkTarget: "/" + header.Linkname, // todo, verify: hard links in docker are always absolute and do not include leading /
 				Uid:        header.Uid,
 				Gid:        header.Gid,
 			})
@@ -400,7 +400,7 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 				Gid:     header.Gid,
 			})
 		default:
-			// fmt.Fprintln(os.Stderr, "skipped:", string(header.Typeflag), header.Name)
+			panic(fmt.Sprintf("unknown tar type: %v", header.Typeflag))
 		}
 	}
 	return result, nil
