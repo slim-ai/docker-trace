@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/alexflint/go-arg"
 	"github.com/docker/docker/api/types"
@@ -328,14 +329,35 @@ func files() {
 	if !(strings.HasPrefix(string(line[8:]), "Attaching ") && strings.HasSuffix(string(line[8:]), " probes...\n")) {
 		lib.Logger.Fatalf("error: unexected startup log: %s", string(line))
 	}
-	fmt.Fprintln(os.Stderr, "ready")
-	if args.BuildContainer {
-		cleanup()
-		os.Exit(0)
-	}
+	//
+	stopReadyCheck := make(chan error)
+	go func() {
+		for {
+			out, err := cli.ContainerCreate(ctx, &container.Config{Cmd: []string{"touch", uid}, Image: "nathants/docker-trace:bpftrace"}, &container.HostConfig{AutoRemove: true}, filesNetworkConfig, filesPlatform, "docker-trace-readycheck-"+uid)
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
+			for _, warn := range out.Warnings {
+				lib.Logger.Println(warn)
+			}
+			//
+			err = cli.ContainerStart(ctx, out.ID, types.ContainerStartOptions{})
+			if err != nil {
+				lib.Logger.Fatal("error: ", err)
+			}
+			//
+			time.Sleep(1 * time.Second)
+			select {
+			case <-stopReadyCheck:
+				return
+			default:
+			}
+		}
+	}()
 	//
 	cwds := make(map[string]string)
 	cgroups := make(map[string]string)
+	ready := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -353,7 +375,19 @@ func files() {
 		str := string(line[8 : len(line)-1]) // docker log uses the first 8 bytes for metadata https://ahmet.im/blog/docker-logs-api-binary-format-explained/
 		switch line[0] {
 		case 1:
-			lib.FilesHandleLine(cwds, cgroups, str)
+			if ready {
+				lib.FilesHandleLine(cwds, cgroups, str)
+			} else {
+				if strings.Contains(str, uid) {
+					ready = true
+					stopReadyCheck <- nil
+					fmt.Fprintln(os.Stderr, "ready")
+					if args.BuildContainer {
+						cleanup()
+						os.Exit(0)
+					}
+				}
+			}
 		case 2:
 			_, _ = fmt.Fprint(os.Stderr, str)
 		default:
