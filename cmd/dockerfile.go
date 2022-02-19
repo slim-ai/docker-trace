@@ -26,7 +26,7 @@ func dockerfile() {
 	var args dockerfileArgs
 	arg.MustParse(&args)
 	ctx := context.Background()
-	lines, err := lib.Dockerfile(ctx, args.Name)
+	lines, err := lib.Dockerfile(ctx, args.Name, "")
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}

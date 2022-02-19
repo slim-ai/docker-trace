@@ -34,7 +34,7 @@ func scan() {
 	var args scanArgs
 	arg.MustParse(&args)
 	ctx := context.Background()
-	files, _, err := lib.Scan(ctx, args.Name)
+	files, _, err := lib.Scan(ctx, args.Name, "")
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}

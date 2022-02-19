@@ -222,20 +222,27 @@ func FindManifest(manifests []Manifest, name string) (Manifest, error) {
 	return Manifest{}, err
 }
 
-func Scan(ctx context.Context, name string) ([]*ScanFile, map[string]int, error) {
+func Scan(ctx context.Context, name string, tarball string) ([]*ScanFile, map[string]int, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		Logger.Println("error:", err)
 		return nil, nil, err
 	}
-
 	var manifests []Manifest
 	var files []*ScanFile
-
-	r, err := cli.ImageSave(ctx, []string{name})
-	if err != nil {
-		Logger.Println("error:", err)
-		return nil, nil, err
+	var r io.ReadCloser
+	if tarball != "" {
+		r, err = os.Open(tarball)
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, nil, err
+		}
+	} else {
+		r, err = cli.ImageSave(ctx, []string{name})
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, nil, err
+		}
 	}
 	defer func() { _ = r.Close() }()
 	tr := tar.NewReader(r)
@@ -406,20 +413,27 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 	return result, nil
 }
 
-func Dockerfile(ctx context.Context, name string) ([]string, error) {
+func Dockerfile(ctx context.Context, name string, tarball string) ([]string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		Logger.Println("error:", err)
 		return nil, err
 	}
-
 	var manifests []Manifest
 	configs := make(map[string]*DockerfileConfig)
-
-	r, err := cli.ImageSave(ctx, []string{name})
-	if err != nil {
-		Logger.Println("error:", err)
-		return nil, err
+	var r io.ReadCloser
+	if tarball != "" {
+		r, err = os.Open(tarball)
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, err
+		}
+	} else {
+		r, err = cli.ImageSave(ctx, []string{name})
+		if err != nil {
+			Logger.Println("error:", err)
+			return nil, err
+		}
 	}
 	defer func() { _ = r.Close() }()
 	tr := tar.NewReader(r)
