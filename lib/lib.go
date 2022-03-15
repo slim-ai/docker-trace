@@ -199,6 +199,10 @@ var (
 )
 
 func FindManifest(manifests []Manifest, name string) (Manifest, error) {
+	// when pulling a previously unknown image by digest, there will be only one
+	if len(manifests) == 1 {
+		return manifests[0], nil
+	}
 	for _, m := range manifests {
 		// find by imageID
 		if strings.HasPrefix(m.Config, name) {
