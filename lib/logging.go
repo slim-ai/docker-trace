@@ -5,17 +5,14 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"time"
 )
 
 type logger struct {
 	disabled bool
-	start    time.Time
 }
 
 var Logger = &logger{
 	disabled: strings.ToLower(os.Getenv("LOGGING") + " ")[:1] == "n",
-	start:    time.Now(),
 }
 
 func caller() string {
@@ -32,7 +29,6 @@ func caller() string {
 func (l *logger) Println(v ...interface{}) {
 	if !l.disabled {
 		var r []interface{}
-		r = append(r, fmt.Sprintf("t+%d", int(time.Since(l.start).Seconds())))
 		r = append(r, caller())
 		r = append(r, v...)
 		fmt.Fprintln(os.Stderr, r...)
