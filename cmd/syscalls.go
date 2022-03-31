@@ -19,9 +19,9 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/gofrs/uuid"
 	"github.com/nathants/docker-trace/lib"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/satori/go.uuid"
 )
 
 // http://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/
@@ -435,7 +435,7 @@ func syscalls() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	ctx := context.Background()
-	uid := uuid.NewV4().String()
+	uid := uuid.Must(uuid.NewV4()).String()
 	_, _, err = cli.ImageInspectWithRaw(ctx, "docker-trace:bpftrace")
 	if err != nil {
 		if err.Error() != "Error: No such image: docker-trace:bpftrace" {

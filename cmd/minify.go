@@ -16,8 +16,8 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/gofrs/uuid"
 	"github.com/nathants/docker-trace/lib"
-	"github.com/satori/go.uuid"
 )
 
 func init() {
@@ -40,7 +40,7 @@ func minify() {
 	//
 	lib.Logger.Println("start minification", args.ContainerIn, "=>", args.ContainerOut)
 	ctx := context.Background()
-	uid := uuid.NewV4().String()
+	uid := uuid.Must(uuid.NewV4()).String()
 	//
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {

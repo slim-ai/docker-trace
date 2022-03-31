@@ -19,9 +19,9 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/gofrs/uuid"
 	"github.com/nathants/docker-trace/lib"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/satori/go.uuid"
 )
 
 func init() {
@@ -180,7 +180,7 @@ func files() {
 		lib.Logger.Fatal("error: ", err)
 	}
 	ctx := context.Background()
-	uid := uuid.NewV4().String()
+	uid := uuid.Must(uuid.NewV4()).String()
 	_, _, err = cli.ImageInspectWithRaw(ctx, "nathants/docker-trace:bpftrace")
 	if err != nil {
 		if err.Error() != "Error: No such image: nathants/docker-trace:bpftrace" {

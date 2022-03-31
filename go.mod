@@ -6,9 +6,9 @@ require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/docker/docker v20.10.14+incompatible
+	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/mattn/go-isatty v0.0.14
 	github.com/opencontainers/image-spec v1.0.2
-	github.com/satori/go.uuid v1.2.0
 )
 
 require (
