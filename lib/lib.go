@@ -226,7 +226,7 @@ func FindManifest(manifests []Manifest, name string) (Manifest, error) {
 	return Manifest{}, err
 }
 
-func Scan(ctx context.Context, name string, tarball string) ([]*ScanFile, map[string]int, error) {
+func Scan(ctx context.Context, name string, tarball string, checkData bool) ([]*ScanFile, map[string]int, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		Logger.Println("error:", err)
@@ -265,7 +265,7 @@ func Scan(ctx context.Context, name string, tarball string) ([]*ScanFile, map[st
 		switch header.Typeflag {
 		case tar.TypeReg:
 			if path.Base(header.Name) == "layer.tar" {
-				layerFiles, err := ScanLayer(header.Name, tr)
+				layerFiles, err := ScanLayer(header.Name, tr, checkData)
 				if err != nil {
 					Logger.Println("error:", err)
 					return nil, nil, err
@@ -341,7 +341,7 @@ type ScanFile struct {
 	Gid         int
 }
 
-func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
+func ScanLayer(layer string, r io.Reader, checkData bool) ([]*ScanFile, error) {
 	var result []*ScanFile
 	tr := tar.NewReader(r)
 	for {
@@ -359,17 +359,21 @@ func ScanLayer(layer string, r io.Reader) ([]*ScanFile, error) {
 		switch header.Typeflag {
 		case tar.TypeReg:
 			var data bytes.Buffer
-			_, err := io.Copy(&data, tr)
-			if err != nil {
-				Logger.Println("error:", err)
-				return nil, err
+			contentType := ""
+			hash := ""
+			if checkData {
+				_, err := io.Copy(&data, tr)
+				if err != nil {
+					Logger.Println("error:", err)
+					return nil, err
+				}
+				contentType = "binary"
+				if utf8.Valid(data.Bytes()) {
+					contentType = "utf8"
+				}
+				sum := sha1.Sum(data.Bytes())
+				hash = hex.EncodeToString(sum[:])
 			}
-			contentType := "binary"
-			if utf8.Valid(data.Bytes()) {
-				contentType = "utf8"
-			}
-			sum := sha1.Sum(data.Bytes())
-			hash := hex.EncodeToString(sum[:])
 			result = append(result, &ScanFile{
 				Layer:       layer,
 				Path:        "/" + header.Name,

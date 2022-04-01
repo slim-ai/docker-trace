@@ -67,7 +67,7 @@ func minify() {
 	}
 	lib.Logger.Println("saved input container to disk")
 	//
-	files, layers, err := lib.Scan(ctx, args.ContainerIn, lib.DataDir()+"/in.tar."+uid)
+	files, layers, err := lib.Scan(ctx, args.ContainerIn, lib.DataDir()+"/in.tar."+uid, false)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
