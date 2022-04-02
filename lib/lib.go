@@ -415,7 +415,7 @@ func ScanLayer(layer string, r io.Reader, checkData bool) ([]*ScanFile, error) {
 				Gid:     header.Gid,
 			})
 		default:
-			panic(fmt.Sprintf("unknown tar type: %v", header.Typeflag))
+			fmt.Fprintln(os.Stderr, "ignoring tar entry:", Pformat(header))
 		}
 	}
 	return result, nil
