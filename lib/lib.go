@@ -74,6 +74,7 @@ func SignalHandler(cancel func()) {
 	signal.Reset(os.Interrupt, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
+		// defer func() {}()
 		<-c
 		cancel()
 	}()

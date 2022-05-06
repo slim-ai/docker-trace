@@ -332,6 +332,7 @@ func files() {
 	//
 	stopReadyCheck := make(chan error)
 	go func() {
+		// defer func() {}()
 		for {
 			out, err := cli.ContainerCreate(ctx, &container.Config{Cmd: []string{"touch", uid}, Image: "nathants/docker-trace:bpftrace"}, &container.HostConfig{AutoRemove: true}, filesNetworkConfig, filesPlatform, "docker-trace-readycheck-"+uid)
 			if err != nil {

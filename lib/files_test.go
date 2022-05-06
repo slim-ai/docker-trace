@@ -35,6 +35,7 @@ func runStdoutStderrChanFiles(command ...string) (<-chan string, <-chan string, 
 	stderrChan := make(chan string)
 	stdoutChan := make(chan string, 1024*1024)
 	tail := func(c chan<- string, r io.ReadCloser) {
+		// defer func() {}()
 		buf := bufio.NewReader(r)
 		for {
 			line, err := buf.ReadBytes('\n')
@@ -52,6 +53,7 @@ func runStdoutStderrChanFiles(command ...string) (<-chan string, <-chan string, 
 		return nil, nil, nil, err
 	}
 	go func() {
+		// defer func() {}()
 		err := cmd.Wait()
 		if err != nil && err.Error() != "signal: killed" {
 			Logger.Fatal("error: ", err)

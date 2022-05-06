@@ -633,6 +633,7 @@ func syscalls() {
 	//
 	errChanTracedContainer := make(chan error)
 	go func() {
+		// defer func() {}()
 		waitChan, errChan := cli.ContainerWait(ctx, args.ContainerID, container.WaitConditionNextExit)
 		select {
 		case err := <-errChan:
@@ -675,6 +676,7 @@ func syscalls() {
 	//
 	errChanLogs := make(chan error)
 	go func() {
+		// defer func() {}()
 		for {
 			line, err := buf.ReadBytes('\n')
 			if err != nil {

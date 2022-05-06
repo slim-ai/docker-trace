@@ -222,6 +222,7 @@ func minify() {
 	//
 	prContext, pwContext := io.Pipe()
 	go func() {
+		// defer func() {}()
 		tw = tar.NewWriter(pwContext)
 		//
 		fi, err := os.Stat(lib.DataDir() + "/out.tar." + uid)

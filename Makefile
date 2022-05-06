@@ -1,11 +1,11 @@
-.PHONY: test docker-trace check check-static check-ineff check-err check-vet test-lib check-bodyclose check-nargs check-fmt check-hasdefault
+.PHONY: test docker-trace check check-static check-ineff check-err check-vet test-lib check-bodyclose check-nargs check-fmt check-hasdefault check-hasdefer
 
 all: docker-trace
 
 docker-trace:
 	CGO_ENABLED=0 go build -ldflags='-s -w' -tags 'netgo osusergo'
 
-check: check-deps check-static check-ineff check-err check-vet check-lint check-bodyclose check-nargs check-fmt check-hasdefault
+check: check-deps check-static check-ineff check-err check-vet check-lint check-bodyclose check-nargs check-fmt check-hasdefault check-hasdefer
 
 check-deps:
 	@which staticcheck >/dev/null   || (cd ~ && go install honnef.co/go/tools/cmd/staticcheck@latest)
@@ -15,9 +15,13 @@ check-deps:
 	@which bodyclose   >/dev/null   || (cd ~ && go install github.com/timakin/bodyclose@latest)
 	@which nargs       >/dev/null   || (cd ~ && go install github.com/alexkohler/nargs/cmd/nargs@latest)
 	@which go-hasdefault >/dev/null || (cd ~ && go install github.com/nathants/go-hasdefault@latest)
+	@which go-hasdefer >/dev/null   || (cd ~ && go install github.com/nathants/go-hasdefer@latest)
 
 check-hasdefault: check-deps
 	@go-hasdefault $(shell find -type f -name "*.go") || true
+
+check-hasdefer: check-deps
+	@go-hasdefer $(shell find -type f -name "*.go") || true
 
 check-fmt: check-deps
 	@go fmt ./... >/dev/null
