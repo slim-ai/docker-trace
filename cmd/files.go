@@ -98,7 +98,7 @@ func files() {
 	var args filesArgs
 	arg.MustParse(&args)
 	//
-	if exec.Command("bash", "-c", "mount | grep '^cgroup2 '").Run() != nil {
+	if exec.Command("bash", "-c", "mount | grep cgroup2").Run() != nil {
 		lib.Logger.Println("fatal: cgroups v2 are required")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/cgroups#Switching_to_cgroups_v2")
 		lib.Logger.Println("https://wiki.archlinux.org/index.php/Kernel_parameters#GRUB")
