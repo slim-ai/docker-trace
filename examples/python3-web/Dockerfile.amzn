@@ -1,6 +1,6 @@
 FROM amazonlinux:latest
 
-RUN yum update && \
+RUN yum update -y && \
     yum install -y python3-pip openssl git
 
 RUN openssl req -x509 -nodes -newkey rsa:4096 -keyout ssl.key -out ssl.crt -days 9999 -subj "/CN=localhost/O=Fake Name/C=US"

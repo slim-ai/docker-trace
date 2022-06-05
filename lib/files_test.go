@@ -54,10 +54,7 @@ func runStdoutStderrChanFiles(command ...string) (<-chan string, <-chan string, 
 	}
 	go func() {
 		// defer func() {}()
-		err := cmd.Wait()
-		if err != nil && err.Error() != "signal: killed" {
-			Logger.Fatal("error: ", err)
-		}
+		_ = cmd.Wait()
 	}()
 	cancel := func() {
 		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGINT)

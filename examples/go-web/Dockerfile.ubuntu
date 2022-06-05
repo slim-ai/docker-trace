@@ -1,9 +1,9 @@
-FROM ubuntu:latest
+FROM ubuntu:focal
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && \
-    apt install -y openssl golang-go
+    apt install -y openssl golang
 
 RUN openssl req -x509 -nodes -newkey rsa:4096 -keyout ssl.key -out ssl.crt -days 9999 -subj "/CN=localhost/O=Fake Name/C=US"
 

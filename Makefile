@@ -48,4 +48,5 @@ check-vet: check-deps
 	@go vet ./...
 
 test:
-	go test --timeout 1h -v lib/*.go
+	go test -failfast --timeout 1h -v lib/logging.go lib/lib.go lib/minify_test.go
+	go test -failfast --timeout 1h -v lib/logging.go lib/lib.go lib/files_test.go
