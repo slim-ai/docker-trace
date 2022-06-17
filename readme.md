@@ -11,6 +11,8 @@ containers have too much stuff in them.
 ```
 >> go install github.com/nathants/docker-trace@latest
 
+>> export PATH=$PATH:$(go env GOPATH)/bin
+
 >> sudo apt-get install -y bpftrace
 ```
 
@@ -26,28 +28,27 @@ scan       - scan a container and list filesystem contents
 unpack     - unpack a container into directories and files
 ```
 
-## example
+## demo
 
-![](./example.gif)
+![](./demo.gif)
 
-## usage
-
-```
-
->> docker-trace files > /tmp/trace.txt &
-
->> docker run -it --rm archlinux:latest curl https://google.com
-
->> cat /tmp/trace.txt | grep -e ssl -e curl | head
-
-a1a54371 /usr/sbin/curl
-a1a54371 /usr/lib/libcurl.so.4
-a1a54371 /usr/lib/libssl.so.1.1
-a1a54371 /etc/ssl/openssl.cnf
+## files
 
 ```
 
-## minification
+>> docker-trace files | grep -e ssl -e curl &
+
+>> docker run archlinux:latest curl https://google.com &>/dev/null
+
+86979bfe1249c1adc347e8c1d1519e8b28d6883585b8623f35321c6e31e02a50 /usr/sbin/curl
+86979bfe1249c1adc347e8c1d1519e8b28d6883585b8623f35321c6e31e02a50 /usr/lib/libcurl.so.4
+86979bfe1249c1adc347e8c1d1519e8b28d6883585b8623f35321c6e31e02a50 /usr/lib/libssl.so.1.1
+86979bfe1249c1adc347e8c1d1519e8b28d6883585b8623f35321c6e31e02a50 /etc/ssl/openssl.cnf
+86979bfe1249c1adc347e8c1d1519e8b28d6883585b8623f35321c6e31e02a50 /etc/ssl/certs/ca-certificates.crt
+
+```
+
+## minify
 
 ```
 
@@ -68,7 +69,7 @@ archlinux    latest                1d6f90387c13    5 weeks ago       381MB
 
 ```
 
-## minification results from tests
+## minify results from tests
 
 ```
 >> docker images --format '{{.Tag}} {{.Size}}'|grep web | sort | column -t
