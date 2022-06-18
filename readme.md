@@ -30,7 +30,7 @@ unpack     - unpack a container into directories and files
 
 ## demo
 
-![](./demo.gif)
+![](https://github.com/nathants/docker-trace/raw/master/demo.gif)
 
 ## files
 
