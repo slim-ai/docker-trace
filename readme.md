@@ -8,7 +8,7 @@ containers have too much stuff in them.
 
 ## install
 
-```
+```bash
 >> go install github.com/nathants/docker-trace@latest
 
 >> export PATH=$PATH:$(go env GOPATH)/bin
@@ -18,7 +18,7 @@ containers have too much stuff in them.
 
 ## usage
 
-```
+```bash
 >> docker-trace -h
 
 dockerfile - scan a container and print the dockerfile
@@ -34,8 +34,7 @@ unpack     - unpack a container into directories and files
 
 ## files
 
-```
-
+```bash
 >> docker-trace files | grep -e ssl -e curl &
 
 >> docker run archlinux:latest curl https://google.com &>/dev/null
@@ -50,8 +49,7 @@ unpack     - unpack a container into directories and files
 
 ## minify
 
-```
-
+```bash
 >> docker-trace files > /tmp/trace.txt &
 
 >> docker run -it --rm archlinux:latest curl https://google.com
@@ -71,7 +69,7 @@ archlinux    latest                1d6f90387c13    5 weeks ago       381MB
 
 ## minify results from tests
 
-```
+```bash
 >> docker images --format '{{.Tag}} {{.Size}}'|grep web | sort | column -t
 
 minify-go-web-alpine-75b2c1029fa03869c64d4716e478a696           468MB
