@@ -1,10 +1,18 @@
-## what
-
-analyze and minimize the filesystem of a container.
-
 ## why
 
-containers have too much stuff in them.
+making containers have less stuff in them should be easy.
+
+## how
+
+trace files accessed as a container runs.
+
+create a smaller container by deleting any file never accessed.
+
+run smaller container to make sure it still works.
+
+## what
+
+a cli tested on ubuntu jammy.
 
 ## install
 
