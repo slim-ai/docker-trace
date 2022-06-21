@@ -1,6 +1,6 @@
 ## why
 
-making containers have less stuff in them should be easy.
+making smaller containers should be easy.
 
 ## how
 
