@@ -8,7 +8,7 @@ trace files accessed as a container runs.
 
 create a smaller container by deleting any file never accessed.
 
-run smaller container to make sure it still works.
+run the smaller container to make sure it still works.
 
 ## what
 
