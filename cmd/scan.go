@@ -18,7 +18,6 @@ func init() {
 
 type scanArgs struct {
 	Name      string `arg:"positional,required"`
-	CheckData bool   `arg:"-c,--check-data" help:"read data to determine sha1 and binary or utf8"`
 }
 
 func (scanArgs) Description() string {
@@ -37,7 +36,7 @@ func scan() {
 	var args scanArgs
 	arg.MustParse(&args)
 	ctx := context.Background()
-	files, _, err := lib.Scan(ctx, args.Name, "", args.CheckData)
+	files, _, err := lib.Scan(ctx, args.Name, "", true)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
@@ -47,10 +46,8 @@ func scan() {
 		"size",
 		"mode",
 		"link-target",
-	}
-	if args.CheckData {
-		header = append(header, "sha1")
-		header = append(header, "content-type")
+		"sha256",
+		"content-type",
 	}
 	fmt.Fprintln(os.Stderr, strings.Join(header, "\t"))
 	for _, file := range files {
@@ -60,10 +57,8 @@ func scan() {
 			valueOrDash(file.Size),
 			valueOrDash(fs.FileMode(file.Mode).String()),
 			valueOrDash(file.LinkTarget),
-		}
-		if args.CheckData {
-			vals = append(vals, valueOrDash(file.Hash))
-			vals = append(vals, valueOrDash(file.ContentType))
+			valueOrDash(file.Hash),
+			valueOrDash(file.ContentType),
 		}
 		fmt.Println(strings.Join(vals, "\t"))
 	}

@@ -4,7 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -372,7 +372,7 @@ func ScanLayer(layer string, r io.Reader, checkData bool) ([]*ScanFile, error) {
 				if utf8.Valid(data.Bytes()) {
 					contentType = "utf8"
 				}
-				sum := sha1.Sum(data.Bytes())
+				sum := sha256.Sum256(data.Bytes())
 				hash = hex.EncodeToString(sum[:])
 			}
 			result = append(result, &ScanFile{
