@@ -3,7 +3,6 @@ package dockertrace
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -39,7 +38,7 @@ func unpack() {
 		lib.Logger.Fatal("error:", shell, err)
 	}
 
-	bytes, err := ioutil.ReadFile("manifest.json")
+	bytes, err := os.ReadFile("manifest.json")
 	if err != nil {
 		lib.Logger.Fatal("error:", err)
 	}

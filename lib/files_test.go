@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -98,7 +97,7 @@ func climbGitRootFiles() {
 	}
 outer:
 	for {
-		files, err := ioutil.ReadDir(".")
+		files, err := os.ReadDir(".")
 		if err != nil {
 			panic(err)
 		}
@@ -119,11 +118,11 @@ outer:
 
 func ensureTestContainerFiles() {
 	if runQuietFiles("docker", "inspect", containerFiles) != nil {
-		dir, err := ioutil.TempDir("", "docker-trace-test.")
+		dir, err := os.MkdirTemp("", "docker-trace-test.")
 		if err != nil {
 			panic(err)
 		}
-		err = ioutil.WriteFile(dir+"/Dockerfile", []byte(dockerfile), 0666)
+		err = os.WriteFile(dir+"/Dockerfile", []byte(dockerfile), 0666)
 		if err != nil {
 			panic(err)
 		}
@@ -284,7 +283,7 @@ func TestTracePythonCdStat(t *testing.T) {
 
 func TestTraceGoOpen(t *testing.T) {
 	ensureSetupFiles()
-	dir, err := ioutil.TempDir("", "docker-trace-test.")
+	dir, err := os.MkdirTemp("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
 		return
@@ -307,7 +306,7 @@ func main() {
     time.Sleep(time.Hour)
 }
 `
-	err = ioutil.WriteFile(dir+"/main.go", []byte(code), 0666)
+	err = os.WriteFile(dir+"/main.go", []byte(code), 0666)
 	if err != nil {
 		t.Error(err)
 		return
@@ -326,7 +325,7 @@ func main() {
 
 func TestTraceGoCdOpen(t *testing.T) {
 	ensureSetupFiles()
-	dir, err := ioutil.TempDir("", "docker-trace-test.")
+	dir, err := os.MkdirTemp("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
 		return
@@ -353,7 +352,7 @@ func main() {
     time.Sleep(time.Hour)
 }
 `
-	err = ioutil.WriteFile(dir+"/main.go", []byte(code), 0666)
+	err = os.WriteFile(dir+"/main.go", []byte(code), 0666)
 	if err != nil {
 		t.Error(err)
 		return
@@ -372,7 +371,7 @@ func main() {
 
 func TestTraceGoCdStat(t *testing.T) {
 	ensureSetupFiles()
-	dir, err := ioutil.TempDir("", "docker-trace-test.")
+	dir, err := os.MkdirTemp("", "docker-trace-test.")
 	if err != nil {
 		t.Error(err)
 		return
@@ -399,7 +398,7 @@ func main() {
     time.Sleep(time.Hour)
 }
 `
-	err = ioutil.WriteFile(dir+"/main.go", []byte(code), 0666)
+	err = os.WriteFile(dir+"/main.go", []byte(code), 0666)
 	if err != nil {
 		t.Error(err)
 		return

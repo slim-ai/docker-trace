@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -102,7 +101,7 @@ func climbGitRootMinify() {
 	}
 outer:
 	for {
-		files, err := ioutil.ReadDir(".")
+		files, err := os.ReadDir(".")
 		if err != nil {
 			panic(err)
 		}
@@ -190,7 +189,7 @@ func testWeb(t *testing.T, app, kind string) {
 		}
 		out, err := client.Get("https://localhost:8080/hello/xyz")
 		if err == nil {
-			bytes, _ := ioutil.ReadAll(out.Body)
+			bytes, _ := io.ReadAll(out.Body)
 			_ = out.Body.Close()
 			fmt.Println(out.StatusCode, string(bytes))
 			break
@@ -252,7 +251,7 @@ func testWeb(t *testing.T, app, kind string) {
 		}
 		out, err := client.Get("https://localhost:8080/hello/xyz")
 		if err == nil {
-			bytes, _ := ioutil.ReadAll(out.Body)
+			bytes, _ := io.ReadAll(out.Body)
 			_ = out.Body.Close()
 			fmt.Println(out.StatusCode, string(bytes))
 			break

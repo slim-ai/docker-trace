@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -106,13 +105,13 @@ func files() {
 	}
 	//
 	//
-	tempDir, err := ioutil.TempDir("", "docker-trace")
+	tempDir, err := os.MkdirTemp("", "docker-trace")
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
 	//
 	// filter out events from cgroups created before this process started and from filepaths in /proc/, /sys/, /dev/
-	err = ioutil.WriteFile(tempDir+"/files.bt", []byte(filesUpdateFilters()), 0666)
+	err = os.WriteFile(tempDir+"/files.bt", []byte(filesUpdateFilters()), 0666)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}

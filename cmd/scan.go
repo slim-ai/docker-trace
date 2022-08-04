@@ -17,7 +17,7 @@ func init() {
 }
 
 type scanArgs struct {
-	Name      string `arg:"positional,required"`
+	Name string `arg:"positional,required"`
 }
 
 func (scanArgs) Description() string {

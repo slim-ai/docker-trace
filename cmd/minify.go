@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -74,7 +73,7 @@ func minify() {
 	lib.Logger.Println("scanned container")
 	//
 	includePaths := map[string]interface{}{}
-	bytes, err := ioutil.ReadAll(os.Stdin)
+	bytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		lib.Logger.Fatal("error: ", err)
 	}
