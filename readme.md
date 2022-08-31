@@ -17,7 +17,7 @@ a cli tested on ubuntu jammy.
 ## install
 
 ```bash
->> go install github.com/nathants/docker-trace@latest
+>> go install github.com/slim-ai/docker-trace@latest
 
 >> export PATH=$PATH:$(go env GOPATH)/bin
 
@@ -38,7 +38,7 @@ unpack     - unpack a container into directories and files
 
 ## demo
 
-![](https://github.com/nathants/docker-trace/raw/master/demo.gif)
+![](https://github.com/slim-ai/docker-trace/raw/master/demo.gif)
 
 ## files
 
